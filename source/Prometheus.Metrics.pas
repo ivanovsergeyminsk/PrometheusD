@@ -19,6 +19,7 @@ type
   end;
 
 {$REGION 'Pre-declaring'}
+  {$M+}
   IMetricsSerializer = interface;
   ICollectorRegistry = interface;
   IMetricFactory = interface;
@@ -33,6 +34,7 @@ type
   IGaugeConfiguration = interface;
   ISummaryConfiguration = interface;
   IHistogramConfiguration = interface;
+  {$M-}
 {$ENDREGION}
 
 {$REGION 'TMetrics. Static API-class for easy creation of metrics'}
@@ -104,6 +106,33 @@ type
     /// Has no effect if not called on startup (it will not remove metrics from a registry already in use).
     /// </summary>
     class procedure SuppressDefaultMetrics; static;
+
+
+    // From https://github.com/prometheus/client_golang/blob/master/prometheus/histogram.go
+    /// <summary>
+    ///  Creates '<paramref name="count"/>' buckets, where the lowest bucket has an
+    ///  upper bound of '<paramref name="start"/>' and each following bucket's upper bound is '<paramref name="factor"/>'
+    ///  times the previous bucket's upper bound.
+    ///
+    ///  The function throws if '<paramref name="count"/>' is 0 or negative, if '<paramref name="start"/>' is 0 or negative,
+    ///  or if '<paramref name="factor"/>' is less than or equal 1.
+    /// </summary>
+    /// <param name="start">The upper bound of the lowest bucket. Must be positive.</param>
+    /// <param name="factor">The factor to increase the upper bound of subsequent buckets. Must be greater than 1.</param>
+    /// <param name="count">The number of buckets to create. Must be positive.</param>
+    class function ExponentialBuckets(Start, Factor: double; Count: integer): TArray<double>; static;
+    // From https://github.com/prometheus/client_golang/blob/master/prometheus/histogram.go
+    /// <summary>
+    ///  Creates '<paramref name="count"/>' buckets, where the lowest bucket has an
+    ///  upper bound of '<paramref name="start"/>' and each following bucket's upper bound is the upper bound of the
+    ///  previous bucket, incremented by '<paramref name="width"/>'
+    ///
+    ///  The function throws if '<paramref name="count"/>' is 0 or negative.
+    /// </summary>
+    /// <param name="start">The upper bound of the lowest bucket.</param>
+    /// <param name="width">The width of each bucket (distance between lower and upper bound).</param>
+    /// <param name="count">The number of buckets to create. Must be positive.</param>
+    class function LinearBuckets(Start, Width: double; Count: integer): TArray<double>; static;
   end;
 
 {$ENDREGION}
@@ -243,6 +272,15 @@ type
     /// Gets the child instance that has no labels.
     /// </summary>
     property Unlabelled: TICollectorChild read GetUnlabelled;
+
+    /// <summary>
+    /// Gets the instance-specific label values of all labelled instances of the collector.
+    /// Values of any inherited static labels are not returned in the result.
+    ///
+    /// Note that during concurrent operation, the set of values returned here
+    /// may diverge from the latest set of values used by the collector.
+    /// </summary>
+    function GetAllLabelValues: TArray<TArray<string>>;
   end;
 
   /// <summary>
@@ -320,6 +358,7 @@ type
     function WriteMetricAsync(Identifier: TArray<byte>; Value: double): ITask;
     function WriteFamilyDeclarationAsync(HeaderLines: TArray < TArray < byte >> ): ITask;
   end;
+
 
 {$ENDREGION}
 
@@ -1339,7 +1378,7 @@ type
     /// <param name="start">The upper bound of the lowest bucket. Must be positive.</param>
     /// <param name="factor">The factor to increase the upper bound of subsequent buckets. Must be greater than 1.</param>
     /// <param name="count">The number of buckets to create. Must be positive.</param>
-    class function ExponetialBuckets(Start, Factor: double; Count: integer): TArray<double>; static;
+    class function ExponentialBuckets(Start, Factor: double; Count: integer): TArray<double>; static;
 
     // From https://github.com/prometheus/client_golang/blob/master/prometheus/histogram.go
     /// <summary>
@@ -1506,6 +1545,21 @@ constructor TCollector<TICollectorChild>.Create(Name, Help: string;
   LabelNames: TArray<string>; StaticLabels: TLabels;
   SuppressInitialValue: boolean);
 begin
+  var Comparer: IEqualityComparer<TLabels> :=
+    TEqualityComparer<TLabels>.Construct(
+      function(const Left, Right: TLabels): Boolean
+      begin
+        result := Left.FHashCode = Right.FHashCode
+      end,
+
+      function(const Value: TLabels): Integer
+      begin
+        result := Value.FHashCode;
+      end
+    );
+
+  FLabelledMetrics := TDictionary<TLabels, TICollectorChild>.Create(Comparer);
+
   inherited Create(Name, Help, LabelNames);
 
   FStaticLabels         := StaticLabels;
@@ -1531,21 +1585,6 @@ begin
     [TPrometheusConstants.ExportEncoding.GetBytes(format('# HELP %s %s', [Name, Help])),
      TPrometheusConstants.ExportEncoding.GetBytes(format('# TYPE %s %s', [Name, &Type.ToString.ToLower]))
     ];
-
-  var Comparer: IEqualityComparer<TLabels> :=
-    TEqualityComparer<TLabels>.Construct(
-      function(const Left, Right: TLabels): Boolean
-      begin
-        result := Left.FHashCode = Right.FHashCode
-      end,
-
-      function(const Value: TLabels): Integer
-      begin
-        result := Value.FHashCode;
-      end
-    );
-
-  FLabelledMetrics := TDictionary<TLabels, TICollectorChild>.Create(Comparer);
 end;
 
 destructor TCollector<TICollectorChild>.Destroy;
@@ -2227,9 +2266,21 @@ begin
   FDefaultFactory   := nil;
 end;
 
+class function TMetrics.ExponentialBuckets(Start, Factor: double;
+  Count: integer): TArray<double>;
+begin
+  result := THistogram.ExponentialBuckets(Start, Factor, Count);
+end;
+
 class function TMetrics.GetDefaultRegistry: ICollectorRegistry;
 begin
   result := TMetricFactory(TMetrics.FDefaultFactory).FRegistry;
+end;
+
+class function TMetrics.LinearBuckets(Start, Width: double;
+  Count: integer): TArray<double>;
+begin
+  result := THistogram.LinearBuckets(Start, Width, Count);
 end;
 
 class function TMetrics.CreateCounter(Name, Help: string;
@@ -3365,7 +3416,7 @@ begin
   end;
 end;
 
-class function THistogram.ExponetialBuckets(Start, Factor: double;
+class function THistogram.ExponentialBuckets(Start, Factor: double;
   Count: integer): TArray<double>;
 begin
   if Count <= 0   then raise EArgumentException.Create('ExponentialBuckets needs a positive Count');
