@@ -22,7 +22,7 @@ type
     [Test]
     procedure Gauge_DecTo_DecrementsButDoesNotIncrement;
 
- //   [Test]
+    [Test]
     procedure NewLabels;
     [Test]
     procedure Counter;

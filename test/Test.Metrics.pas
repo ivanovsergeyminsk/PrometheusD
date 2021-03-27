@@ -40,12 +40,12 @@ begin
   Gauge.Dec(0.2);
   Assert.AreEqual<double>(3.8, Gauge.Value);
 
-//  Assert.WillRaise(
-//    procedure begin
-//      ICollector<IGauge>(Gauge).Labels(['1']);
-//    end,
-//    EArgumentException
-//  );
+  Assert.WillRaise(
+    procedure begin
+      Gauge.Labels(['1']);
+    end,
+    EArgumentException
+  );
 
   var Counter := TMetrics.CreateCounter('Name2', 'Help2', ['Label1']);
   Counter.Inc;
@@ -59,8 +59,10 @@ begin
   );
   Assert.AreEqual<double>(4.2, Counter.Value);
 
-//  Assert.AreEqual<double>(0, ICounter(ICollector<ICounter>(Counter).Labels(['a'])).Value);
-//  Counter.
+  Assert.AreEqual<double>(0, Counter.Labels(['a']).Value);
+  Counter.Labels(['a']).Inc(3.3);
+  Counter.Labels(['a']).Inc(1.1);
+  Assert.AreEqual<double>(4.4, Counter.Labels(['a']).Value);
 end;
 
 procedure TMetricsTest.Setup;

@@ -232,16 +232,17 @@ type
     property LabelNames: TArray<string> read GetLabelNames;
   end;
 
-  ICollector<TChild> = interface(ICollector)
-    function GetUnlabelled(): ICollectorChild;
+  ICollector<TICollectorChild> = interface(ICollector)
+    function GetUnlabelled(): TICollectorChild;
     // This servers a slightly silly but useful purpose: by default if you start typing .La... and trigger Intellisense
     // it will often for whatever reason focus on LabelNames instead of Labels, leading to tiny but persistent frustration.
     // Having WithLabels() instead eliminates the other candidate and allows for a frustration-free typing experience.
-    function WithLabels(LabelValues: TArray<string>): ICollectorChild;
+    function WithLabels(LabelValues: TArray<string>): TICollectorChild;
+    function Labels(LabelValues: TArray<string>): TICollectorChild;
     /// <summary>
     /// Gets the child instance that has no labels.
     /// </summary>
-    property Unlabelled: ICollectorChild read GetUnlabelled;
+    property Unlabelled: TICollectorChild read GetUnlabelled;
   end;
 
   /// <summary>
@@ -250,14 +251,33 @@ type
   ICollectorChild = interface
   end;
 
-  ICounter = interface(ICollectorChild)
+  ICounterChild = interface;
+  ICounter = interface(ICollector<ICounterChild>)
     procedure IncTo(TargetValue: double);
     procedure Inc(Increment: double = 1);
     function GetValue(): double;
     property Value: double read GetValue;
   end;
 
-  IGauge = interface(ICollectorChild)
+  ICounterChild = interface(ICollectorChild)
+    procedure IncTo(TargetValue: double);
+    procedure Inc(Increment: double = 1);
+    function GetValue(): double;
+    property Value: double read GetValue;
+  end;
+
+  IGaugeChild = interface;
+  IGauge = interface(ICollector<IGaugeChild>)
+    procedure &Set(Val: double);
+    procedure IncTo(TargetValue: double);
+    procedure Inc(Increment: double = 1);
+    procedure DecTo(TargetValue: double);
+    procedure Dec(Decrement: double = 1);
+    function GetValue(): double;
+    property Value: double read GetValue;
+  end;
+
+  IGaugeChild = interface(ICollectorChild)
     procedure &Set(Val: double);
     procedure IncTo(TargetValue: double);
     procedure Inc(Increment: double = 1);
@@ -271,10 +291,24 @@ type
     procedure Observe(Val: double);
   end;
 
-  ISummary = interface(IObserver)
+  ISummaryChild = interface;
+  ISummary = interface(ICollector<ISummaryChild>)
+    procedure Observe(Val: double);
   end;
 
-  IHistogram = interface(IObserver)
+  ISummaryChild = interface(IObserver)
+  end;
+
+  IHistogramChild = interface;
+  IHistogram = interface(ICollector<IHistogramChild>)
+    function GetSum(): double;
+    property Sum: double read GetSum;
+    function GetCount(): Int64;
+    property Count: Int64 read GetCount;
+    procedure Observe(Val: double; Count: Int64);
+  end;
+
+  IHistogramChild = interface(ICollectorChild)
     function GetSum(): double;
     property Sum: double read GetSum;
     function GetCount(): Int64;
@@ -679,27 +713,27 @@ type
     property LabelNames: TArray<string> read GetLabelNames;
   end;
 
-  TCollector<TChild: TChildBase> = class abstract(TCollector, ICollector<TChild>)
+  TCollector<TICollectorChild: IInterface> = class abstract(TCollector, ICollector<TICollectorChild>)
   private
     /// <summary>
     /// Set of static labels obtained from any hierarchy level (either defined in metric configuration or in registry).
     /// </summary>
     FStaticLabels: TLabels;
     FSuppressInitialValue: boolean;
-    FLabelledMetrics: TDictionary<TLabels, ICollectorChild>; //Concurrent
+    FLabelledMetrics: TDictionary<TLabels, TICollectorChild>; //Concurrent
     FFamilyHeaderLines: TArray<TArray<byte>>;
     // Lazy-initialized since not every collector will use a child with no labels.
-    FUnlabelled: ICollectorChild;
-    FUnlabelledLazy: TFunc<ICollectorChild>;
-    function GetUnlabelled: ICollectorChild;
-    function GetOrAddLabelled(Key: TLabels): ICollectorChild;
+    FUnlabelled: TICollectorChild;
+    FUnlabelledLazy: TFunc<TICollectorChild>;
+    function GetUnlabelled: TICollectorChild;
+    function GetOrAddLabelled(Key: TLabels): TICollectorChild;
     procedure EnsureUnlabelledMetricCreatedIfNoLabels;
   protected
     constructor Create(Name, Help: string; LabelNames: TArray<string>; StaticLabels: TLabels; SuppressInitialValue: boolean);
     /// <summary>
     /// Gets the child instance that has no labels.
     /// </summary>
-    property Unlabelled: ICollectorChild read GetUnlabelled;
+    property Unlabelled: TICollectorChild read GetUnlabelled;
     procedure RemoveLabelled(Labels: TLabels); overload; override;
     /// <summary>
     /// For tests that want to see what label values were used when metrics were created.
@@ -708,14 +742,14 @@ type
     /// <summary>
     /// Creates a new instance of the child collector type.
     /// </summary>
-    function NewChild(Labels, FlattenedLabels: TLabels; Publish: boolean): ICollectorChild; virtual; abstract;
+    function NewChild(Labels, FlattenedLabels: TLabels; Publish: boolean): TICollectorChild; virtual; abstract;
     function GetType: TMetricType; virtual; abstract;
     property &Type: TMetricType read GetType;
 
     function CollectAndSerializeAsync(Serializer: IMetricsSerializer): ITask; override;
   public
     destructor Destroy; override;
-    function Labels(LabelValues: TArray<string>): ICollectorChild;
+    function Labels(LabelValues: TArray<string>): TICollectorChild;
     procedure RemoveLabelled(LabelValues: TArray<string>); reintroduce; overload;
     /// <summary>
     /// Gets the instance-specific label values of all labelled instances of the collector.
@@ -728,7 +762,7 @@ type
     // This servers a slightly silly but useful purpose: by default if you start typing .La... and trigger Intellisense
     // it will often for whatever reason focus on LabelNames instead of Labels, leading to tiny but persistent frustration.
     // Having WithLabels() instead eliminates the other candidate and allows for a frustration-free typing experience.
-    function WithLabels(LabelValues: TArray<string>): ICollectorChild;
+    function WithLabels(LabelValues: TArray<string>): TICollectorChild;
   end;
 
 {$ENDREGION}
@@ -957,7 +991,7 @@ type
   end;
 
   {$REGION 'Counter'}
-  TCounterChild = class sealed(TChildBase, ICounter)
+  TCounterChild = class sealed(TChildBase, ICounterChild)
   private
     FIdentifier: TArray<byte>;
     FValue: TThreadSafeDouble;
@@ -972,11 +1006,11 @@ type
     property Value: double read GetValue;
   end;
 
-  TCounter = class sealed(TCollector<TCounterChild>, ICounter)
+  TCounter = class sealed(TCollector<ICounterChild>, ICounter)
   private
     function GetValue: double;
     function NewChild(Labels, FlattenedLabels: TLabels;
-      Publish: boolean): ICollectorChild; override;
+      Publish: boolean): ICounterChild; override;
   protected
     constructor Create(Name, Help: string; LabelNames: TArray<string>; StaticLabels: TLabels; SuppressInitialValue: boolean);
     function GetType: TMetricType; override;
@@ -991,7 +1025,7 @@ type
   {$ENDREGION}
 
   {$REGION 'Gauge'}
-  TGaugeChild = class sealed(TChildBase, IGauge)
+  TGaugeChild = class sealed(TChildBase, IGaugeChild)
   private
     FIdentifier: TArray<byte>;
     FValue: TThreadSafeDouble;
@@ -1008,11 +1042,11 @@ type
     property Value: double read GetValue;
   end;
 
-  TGauge = class sealed(TCollector<TGaugeChild>, IGauge)
+  TGauge = class sealed(TCollector<IGaugeChild>, IGauge)
   private
     function GetValue: double;
     function NewChild(Labels, FlattenedLabels: TLabels;
-      Publish: boolean): ICollectorChild; override;
+      Publish: boolean): IGaugeChild; override;
   protected
     constructor Create(Name, Help: string; LabelNames: TArray<string>; StaticLabels: TLabels; SuppressInitialValue: boolean);
     function GetType: TMetricType; override;
@@ -1028,7 +1062,7 @@ type
 
   {$REGION 'Summary'}
 
-  TSummaryChild = class sealed(TChildBase, ISummary)
+  TSummaryChild = class sealed(TChildBase, ISummaryChild)
   strict private type
     TSampleBuffer = class
     private
@@ -1207,7 +1241,7 @@ type
     procedure Observe(Value: double); overload;
   end;
 
-  TSummary = class sealed(TCollector<TSummaryChild>, ISummary)
+  TSummary = class sealed(TCollector<ISummaryChild>, ISummary)
   private
     // Label that defines the quantile in a summary.
     const QuantileLabel = 'quantile';
@@ -1228,7 +1262,7 @@ type
     FBufCap: integer;
 
     function NewChild(Labels, FlattenedLabels: TLabels;
-      Publish: boolean): ICollectorChild; override;
+      Publish: boolean): ISummaryChild; override;
   protected
     /// <summary>
     /// Client library guidelines say that the summary should default to not measuring quantiles.
@@ -1251,7 +1285,7 @@ type
   {$ENDREGION}
 
   {$REGION 'Histogram'}
-  THistogramChild = class sealed(TChildBase, IHistogram)
+  THistogramChild = class sealed(TChildBase, IHistogramChild)
   private
     FSum: TThreadSafeDouble;
     FBucketCounts: TArray<TThreadSafeInt64>;
@@ -1273,7 +1307,7 @@ type
     procedure Observe(Value: double; Count: Int64); overload;
   end;
 
-  THistogram = class sealed(TCollector<THistogramChild>, IHistogram)
+  THistogram = class sealed(TCollector<IHistogramChild>, IHistogram)
   private const
     DefaultBuckets: TArray<double> = [0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10];
   private
@@ -1283,7 +1317,7 @@ type
     function GetSum: double;
 
     function NewChild(Labels, FlattenedLabels: TLabels;
-    Publish: boolean): ICollectorChild; override;
+    Publish: boolean): IHistogramChild; override;
   protected
     constructor Create(Name, Help: string; LabelNames: TArray<string>; StaticLabels: TLabels; SuppressInitialValue: boolean; Buckets: TArray<double> = []);
     function GetType: TMetricType; override;
@@ -1448,25 +1482,27 @@ end;
 
 {$REGION 'TCollector<TChild>'}
 
-function TCollector<TChild>.CollectAndSerializeAsync(
+function TCollector<TICollectorChild>.CollectAndSerializeAsync(
   Serializer: IMetricsSerializer): ITask;
 begin
   result := TTask.Run(
-    procedure begin
+    procedure
+      var Child: TICollectorChild;
+    begin
       EnsureUnlabelledMetricCreatedIfNoLabels;
 
       TTask.WaitForAny(Serializer.WriteFamilyDeclarationAsync(FFamilyHeaderLines));
       TMonitor.Enter(FLabelledMetrics);
       try
-        for var Child: ICollectorChild in FLabelledMetrics.Values do
-          TTask.WaitForAny(TChild(Child).CollectAndSerializeAsync(Serializer));
+        for Child in FLabelledMetrics.Values do //inline variable don't set nil
+          TTask.WaitForAny(TChildBase(Child).CollectAndSerializeAsync(Serializer));
       finally
         TMonitor.Exit(FLabelledMetrics);
       end;
     end);
 end;
 
-constructor TCollector<TChild>.Create(Name, Help: string;
+constructor TCollector<TICollectorChild>.Create(Name, Help: string;
   LabelNames: TArray<string>; StaticLabels: TLabels;
   SuppressInitialValue: boolean);
 begin
@@ -1477,7 +1513,7 @@ begin
 
   FUnlabelled := nil;
   FUnlabelledLazy := (
-    function: ICollectorChild
+    function: TICollectorChild
     begin
       result := GetOrAddLabelled(TLabels.Empty);
     end);
@@ -1496,10 +1532,23 @@ begin
      TPrometheusConstants.ExportEncoding.GetBytes(format('# TYPE %s %s', [Name, &Type.ToString.ToLower]))
     ];
 
-  FLabelledMetrics := TDictionary<TLabels, ICollectorChild>.Create;
+  var Comparer: IEqualityComparer<TLabels> :=
+    TEqualityComparer<TLabels>.Construct(
+      function(const Left, Right: TLabels): Boolean
+      begin
+        result := Left.FHashCode = Right.FHashCode
+      end,
+
+      function(const Value: TLabels): Integer
+      begin
+        result := Value.FHashCode;
+      end
+    );
+
+  FLabelledMetrics := TDictionary<TLabels, TICollectorChild>.Create(Comparer);
 end;
 
-destructor TCollector<TChild>.Destroy;
+destructor TCollector<TICollectorChild>.Destroy;
 begin
   FUnlabelled := nil;
   FLabelledMetrics.Clear;
@@ -1507,7 +1556,7 @@ begin
   inherited;
 end;
 
-procedure TCollector<TChild>.EnsureUnlabelledMetricCreatedIfNoLabels;
+procedure TCollector<TICollectorChild>.EnsureUnlabelledMetricCreatedIfNoLabels;
 begin
   // We want metrics to exist even with 0 values if they are supposed to be used without labels.
   // Labelled metrics are created when label values are assigned. However, as unlabelled metrics are lazy-created
@@ -1518,7 +1567,7 @@ begin
     GetOrAddLabelled(TLabels.Empty);
 end;
 
-function TCollector<TChild>.GetAllLabels: TArray<TLabels>;
+function TCollector<TICollectorChild>.GetAllLabels: TArray<TLabels>;
 begin
   TMonitor.Enter(FLabelledMetrics);
   try
@@ -1528,7 +1577,7 @@ begin
   end;
 end;
 
-function TCollector<TChild>.GetAllLabelValues: TArray<TArray<string>>;
+function TCollector<TICollectorChild>.GetAllLabelValues: TArray<TArray<string>>;
 begin
   var LResult: TArray<TArray<string>>;
   for var Labels: TLabels in FLabelledMetrics.Keys do begin
@@ -1540,24 +1589,23 @@ begin
   result := LResult;
 end;
 
-function TCollector<TChild>.GetOrAddLabelled(Key: TLabels): ICollectorChild;
+function TCollector<TICollectorChild>.GetOrAddLabelled(Key: TLabels): TICollectorChild;
 begin
-  // Don't allocate lambda for GetOrAdd in the common case that the labeled metrics exist.
-  var Metric: ICollectorChild := nil;
+//   Don't allocate lambda for GetOrAdd in the common case that the labeled metrics exist.
+//  var Metric: TICollectorChild := nil;
   TMonitor.Enter(FLabelledMetrics);
   try
-    if not FLabelledMetrics.TryGetValue(Key, Metric) then begin
-      Metric := NewChild(Key, Key.Concat(FStaticLabels), not FSuppressInitialValue);
-      FLabelledMetrics.Add(Key, Metric);
+    if not FLabelledMetrics.TryGetValue(Key, result) then begin
+      result := NewChild(Key, Key.Concat(FStaticLabels), not FSuppressInitialValue);
+      FLabelledMetrics.Add(Key, result);
     end;
   finally
     TMonitor.Exit(FLabelledMetrics);
   end;
-
-  result := Metric;
+//  result := Metric;
 end;
 
-function TCollector<TChild>.GetUnlabelled: ICollectorChild;
+function TCollector<TICollectorChild>.GetUnlabelled: TICollectorChild;
 begin
   if not assigned(FUnlabelled) then
     FUnlabelled := FUnlabelledLazy();
@@ -1565,13 +1613,13 @@ begin
   result := FUnlabelled;
 end;
 
-function TCollector<TChild>.Labels(LabelValues: TArray<string>): ICollectorChild;
+function TCollector<TICollectorChild>.Labels(LabelValues: TArray<string>): TICollectorChild;
 begin
   var Key := TLabels.New(LabelNames, LabelValues);
   result := GetOrAddLabelled(Key);
 end;
 
-procedure TCollector<TChild>.RemoveLabelled(LabelValues: TArray<string>);
+procedure TCollector<TICollectorChild>.RemoveLabelled(LabelValues: TArray<string>);
 begin
   var Key := TLabels.New(LabelNames, LabelValues);
   TMonitor.Enter(FLabelledMetrics);
@@ -1583,12 +1631,12 @@ begin
   end;
 end;
 
-function TCollector<TChild>.WithLabels(LabelValues: TArray<string>): ICollectorChild;
+function TCollector<TICollectorChild>.WithLabels(LabelValues: TArray<string>): TICollectorChild;
 begin
   result := Labels(LabelValues);
 end;
 
-procedure TCollector<TChild>.RemoveLabelled(Labels: TLabels);
+procedure TCollector<TICollectorChild>.RemoveLabelled(Labels: TLabels);
 begin
   TMonitor.Enter(FLabelledMetrics);
   try
@@ -2291,7 +2339,7 @@ begin
 end;
 
 function TCounter.NewChild(Labels, FlattenedLabels: TLabels;
-  Publish: boolean): ICollectorChild;
+  Publish: boolean): ICounterChild;
 begin
   result := TCounterChild.Create(self, Labels, FlattenedLabels, Publish);
 end;
@@ -2385,7 +2433,7 @@ begin
 end;
 
 function TGauge.NewChild(Labels, FlattenedLabels: TLabels;
-  Publish: boolean): ICollectorChild;
+  Publish: boolean): IGaugeChild;
 begin
   result := TGaugeChild.Create(self, Labels, FlattenedLabels, Publish);
 end;
@@ -2971,7 +3019,7 @@ begin
 end;
 
 function TSummary.NewChild(Labels, FlattenedLabels: TLabels;
-  Publish: boolean): ICollectorChild;
+  Publish: boolean): ISummaryChild;
 begin
   result := TSummaryChild.Create(self, Labels, FlattenedLabels, Publish);
 end;
@@ -3367,7 +3415,7 @@ begin
 end;
 
 function THistogram.NewChild(Labels, FlattenedLabels: TLabels;
-  Publish: boolean): ICollectorChild;
+  Publish: boolean): IHistogramChild;
 begin
   result := THistogramChild.Create(self, labels, FlattenedLabels, Publish);
 end;
