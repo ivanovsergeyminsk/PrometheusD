@@ -26,6 +26,9 @@ type
     procedure NewLabels;
     [Test]
     procedure Counter;
+
+    [Test]
+    procedure Def;
   end;
 
 implementation
@@ -103,6 +106,19 @@ begin
 
   Counter.IncTo(10);
   Assert.AreEqual<double>(100, Counter.Value);
+end;
+
+procedure TPrometheusTest.Def;
+begin
+  var Registry := TMetrics.DefaultRegistry;
+
+  var Stream := TStringStream.Create('', TEncoding.UTF8);
+  TTask.WaitForAny(Registry.CollectAndExportAsTextAsync(Stream));
+
+  var Text := Stream.DataString;
+  Stream.Free;
+  text := '';
+
 end;
 
 procedure TPrometheusTest.Gauge_DecTo_DecrementsButDoesNotIncrement;

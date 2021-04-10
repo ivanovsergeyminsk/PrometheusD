@@ -18,7 +18,12 @@ uses
   Prometheus.Servers in 'source\Prometheus.Servers.pas',
   Common.Debug in 'source\Common.Debug.pas',
   Common.DateTime.Helper in 'source\Common.DateTime.Helper.pas',
-  Test.Metrics in 'test\Test.Metrics.pas';
+  Test.Metrics in 'test\Test.Metrics.pas',
+  Test.CollectorRegistry in 'test\Test.CollectorRegistry.pas',
+  Test.Counter in 'test\Test.Counter.pas',
+  Test.Gauge in 'test\Test.Gauge.pas',
+  Test.MetricInitialization in 'test\Test.MetricInitialization.pas',
+  Prometheus.DelphiStats in 'source\Prometheus.DelphiStats.pas';
 
 //{$IFNDEF TESTINSIGHT}
 {$IFNDEF TESTINSIGHT}

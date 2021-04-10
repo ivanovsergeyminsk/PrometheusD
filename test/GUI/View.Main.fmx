@@ -1,0 +1,63 @@
+object FormMain: TFormMain
+  Left = 0
+  Top = 0
+  Caption = 'Form1'
+  ClientHeight = 480
+  ClientWidth = 640
+  FormFactor.Width = 320
+  FormFactor.Height = 480
+  FormFactor.Devices = [Desktop]
+  OnCreate = FormCreate
+  OnDestroy = FormDestroy
+  DesignerMasterStyle = 0
+  object ButtonStart: TButton
+    Position.X = 8.000000000000000000
+    Position.Y = 16.000000000000000000
+    TabOrder = 1
+    Text = 'ButtonStart'
+    OnClick = ButtonStartClick
+  end
+  object ButtonStop: TButton
+    Position.X = 96.000000000000000000
+    Position.Y = 16.000000000000000000
+    TabOrder = 0
+    Text = 'Button1'
+    OnClick = ButtonStopClick
+  end
+  object Button1: TButton
+    Position.X = 200.000000000000000000
+    Position.Y = 16.000000000000000000
+    TabOrder = 2
+    Text = 'Button1'
+    OnClick = Button1Click
+  end
+  object Edit1: TEdit
+    Touch.InteractiveGestures = [LongTap, DoubleTap]
+    TabOrder = 3
+    Position.X = 392.000000000000000000
+    Position.Y = 16.000000000000000000
+    Size.Width = 105.000000000000000000
+    Size.Height = 22.000000000000000000
+    Size.PlatformDefault = False
+  end
+  object Button2: TButton
+    Position.X = 392.000000000000000000
+    Position.Y = 40.000000000000000000
+    Size.Width = 49.000000000000000000
+    Size.Height = 22.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 4
+    Text = 'Button2'
+    OnClick = Button2Click
+  end
+  object Button3: TButton
+    Position.X = 448.000000000000000000
+    Position.Y = 40.000000000000000000
+    Size.Width = 49.000000000000000000
+    Size.Height = 22.000000000000000000
+    Size.PlatformDefault = False
+    TabOrder = 5
+    Text = 'Button3'
+    OnClick = Button3Click
+  end
+end

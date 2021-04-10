@@ -106,7 +106,7 @@ uses
 
 function TDateTimeHelper.Add(const Value: TTimeSpan): TDateTime;
 begin
-  result := self.AddMilliseconds(Value.Milliseconds);
+  result := self.AddMilliseconds(Value.Ticks div TTimeSpan.TicksPerMillisecond);
 end;
 
 function TDateTimeHelper.AddDays(const aNumberOfDays: Integer): TDateTime;

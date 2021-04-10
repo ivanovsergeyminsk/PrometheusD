@@ -1,0 +1,48 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{DCD1AF9B-0766-4DE1-80B9-0072387316C7}</ProjectGuid>
+    </PropertyGroup>
+    <ItemGroup>
+        <Projects Include="Prometheus.Test.dproj">
+            <Dependencies/>
+        </Projects>
+        <Projects Include="test\GUI\TestServer.dproj">
+            <Dependencies/>
+        </Projects>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>Default.Personality.12</Borland.Personality>
+        <Borland.ProjectType/>
+        <BorlandProject>
+            <Default.Personality/>
+        </BorlandProject>
+    </ProjectExtensions>
+    <Target Name="Prometheus_Test">
+        <MSBuild Projects="Prometheus.Test.dproj"/>
+    </Target>
+    <Target Name="Prometheus_Test:Clean">
+        <MSBuild Projects="Prometheus.Test.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="Prometheus_Test:Make">
+        <MSBuild Projects="Prometheus.Test.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="TestServer">
+        <MSBuild Projects="test\GUI\TestServer.dproj"/>
+    </Target>
+    <Target Name="TestServer:Clean">
+        <MSBuild Projects="test\GUI\TestServer.dproj" Targets="Clean"/>
+    </Target>
+    <Target Name="TestServer:Make">
+        <MSBuild Projects="test\GUI\TestServer.dproj" Targets="Make"/>
+    </Target>
+    <Target Name="Build">
+        <CallTarget Targets="Prometheus_Test;TestServer"/>
+    </Target>
+    <Target Name="Clean">
+        <CallTarget Targets="Prometheus_Test:Clean;TestServer:Clean"/>
+    </Target>
+    <Target Name="Make">
+        <CallTarget Targets="Prometheus_Test:Make;TestServer:Make"/>
+    </Target>
+    <Import Project="$(BDS)\Bin\CodeGear.Group.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Group.Targets')"/>
+</Project>

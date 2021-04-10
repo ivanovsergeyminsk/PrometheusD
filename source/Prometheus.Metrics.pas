@@ -48,8 +48,7 @@ type
   /// </summary>
   TMetrics = class
   strict private
-    class var FDefaultFactory: IMetricFactory;
-    class function GetDefaultRegistry: ICollectorRegistry; static;
+    class var FDefaultRegistry: ICollectorRegistry;
     class constructor Create;
     class destructor Destroy;
   protected
@@ -58,7 +57,7 @@ type
     /// <summary>
     /// The default registry where all metrics are registered by default.
     /// </summary>
-    class property DefaultRegistry: ICollectorRegistry read GetDefaultRegistry;
+    class property DefaultRegistry: ICollectorRegistry read FDefaultRegistry;
     /// <summary>
     /// Creates a new registry. You may want to use multiple registries if you want to
     /// export different sets of metrics via different exporters (e.g. on different URLs).
@@ -198,6 +197,11 @@ type
     /// Collects metrics from all the registered collectors and sends them to the specified serializer.
     /// </summary>
     function CollectAndSerializeAsync(Serializer: IMetricsSerializer): ITask;
+
+    /// <summary>
+    /// Adds metrics to a registry.
+    /// </summary>
+    function MetricFactory: IMetricFactory;
   end;
 
   /// <summary>
@@ -469,6 +473,8 @@ type
   strict private
     class var FEncoding: TEncoding;
     class constructor Create;
+
+    class function GetEncoding: TEncoding; static;
   public const
     ExporterContentType = 'text/plain; version=0.0.4; charset=utf-8';
     // ASP.NET does not want to accept the parameters in PushStreamContent for whatever reason...
@@ -476,7 +482,7 @@ type
   public
     // Use UTF-8 encoding, but provide the flag to ensure the Unicode Byte Order Mark is never
     // pre-pended to the output stream.
-    class property ExportEncoding: TEncoding read FEncoding;
+    class property ExportEncoding: TEncoding read GetEncoding;
   end;
 
 {$ENDREGION}
@@ -691,7 +697,9 @@ uses
   Winapi.Windows,
   Common.BitConverter,
   Common.Debug,
-  Common.DateTime.Helper
+  Common.DateTime.Helper,
+
+  Prometheus.DelphiStats
   ;
 
 type
@@ -833,6 +841,7 @@ type
     FBeforeFirstCollectCallback: TProc;
     FHasPerformedFirstCollect: boolean;
 
+    FMetrics: IMetricFactory;
 
     function GetStaticLabels: TArray<TPair<string, string>>;
   protected type
@@ -915,6 +924,10 @@ type
     /// This method is designed to be used with custom output mechanisms that do not use an IMetricServer.
     /// </summary>
     function CollectAndExportAsTextAsync(Dest: TStream): ITask;
+    /// <summary>
+    /// Adds metrics to a registry.
+    /// </summary>
+    function MetricFactory: IMetricFactory;
   end;
 
   /// <summary>
@@ -922,7 +935,7 @@ type
   /// </summary>
   TMetricFactory = class sealed(TDebugInterfacedObject, IMetricFactory)
   private
-    FRegistry: ICollectorRegistry;
+    [weak] FRegistry: ICollectorRegistry;
 
     function CreateStaticLabels(MetricConfiguration: IMetricConfiguration): TLabels;
   protected
@@ -1138,6 +1151,7 @@ type
     public
       N: double;
       constructor Create(Invariant: TInvariant);
+      destructor Destroy; override;
       procedure Merge(Samples: TList<TSample>);
       procedure Reset;
       function Count: integer;
@@ -1271,6 +1285,7 @@ type
     FLock: TObject;
   protected
     constructor Create(Parent: TCollector; Labels, FlattenedLabels: TLabels; Publish: boolean);
+    destructor Destroy; override;
     function CollectAndSerializeImplAsync(Serializer: IMetricsSerializer): ITask; override;
     /// <summary>
     /// For unit tests only
@@ -1294,6 +1309,8 @@ type
     class var FDefObjectiveArray: TArray<TQuantileEpsilonPair>;
     class var FDefObjectives: TList<TQuantileEpsilonPair>;
     class var FDefMaxAge: TTimeSpan;
+
+    class constructor Create;
   private
     FObjectives: TList<TQuantileEpsilonPair>;
     FMaxAge: TTimeSpan;
@@ -1428,7 +1445,7 @@ type
   /// </remarks>
   TTextSerializer = class(TDebugInterfacedObject, IMetricsSerializer)
   strict private const
-    NewLine: TArray<byte> = [ord(#13)];
+    NewLine: TArray<byte> = [ord(#10)];
     Space: TArray<byte>   = [ord(' ')];
   strict private
     // Reuse a buffer to do the UTF-8 encoding.
@@ -1861,6 +1878,7 @@ begin
   FCollectors       := TDictionary<string, ICollector>.Create;
   FBeforeCollectCallbacks       := TList<TProc>.Create;
   FBeforeCollectAsyncCallbacks  := TList<TFunc<ITask>>.Create;
+  FMetrics := nil;
 end;
 
 destructor TCollectorRegistry.Destroy;
@@ -1901,6 +1919,11 @@ end;
 function TCollectorRegistry.GetStaticLabels: TArray<TPair<string, string>>;
 begin
   result := FStaticLabels;
+end;
+
+function TCollectorRegistry.MetricFactory: IMetricFactory;
+begin
+  result := FMetrics;
 end;
 
 procedure TCollectorRegistry.SetBeforeFirstCollectCallback(Action: TProc);
@@ -1980,6 +2003,8 @@ begin
     raise EArgumentNilException.Create('Registry');
 
   FRegistry := Registry;
+
+  TCollectorRegistry(FRegistry).FMetrics := self;
 end;
 
 function TMetricFactory.CreateCounter(Name, Help: string;
@@ -2169,6 +2194,9 @@ end;
 class function TSummaryConfiguration.Default: ISummaryConfiguration;
 begin
   result := TSummaryConfiguration.Create;
+  result.MaxAge     := TSummary.DefMaxAge;
+  result.AgeBuckets := TSummary.DefAgeBuckets;
+  result.BufferSize := TSummary.DefBufCap;
 end;
 
 destructor TSummaryConfiguration.Destroy;
@@ -2245,12 +2273,10 @@ end;
 {$REGION 'TMetrics'}
 
 class constructor TMetrics.Create;
-var
-  LDefaultRegistry: ICollectorRegistry;
 begin
-  LDefaultRegistry := TCollectorRegistry.Create;
+  FDefaultRegistry := TCollectorRegistry.Create;
 
-  TCollectorRegistry(LDefaultRegistry).SetBeforeFirstCollectCallback(
+  TCollectorRegistry(FDefaultRegistry).SetBeforeFirstCollectCallback(
     procedure begin
       // We include some metrics by default, just to give some output when a user first uses the library.
       // These are not designed to be super meaningful/useful metrics.
@@ -2258,23 +2284,18 @@ begin
     end
   );
 
-  FDefaultFactory := TMetricFactory.Create(LDefaultRegistry);
+  TMetricFactory.Create(FDefaultRegistry);
 end;
 
 class destructor TMetrics.Destroy;
 begin
-  FDefaultFactory   := nil;
+  FDefaultRegistry   := nil;
 end;
 
 class function TMetrics.ExponentialBuckets(Start, Factor: double;
   Count: integer): TArray<double>;
 begin
   result := THistogram.ExponentialBuckets(Start, Factor, Count);
-end;
-
-class function TMetrics.GetDefaultRegistry: ICollectorRegistry;
-begin
-  result := TMetricFactory(TMetrics.FDefaultFactory).FRegistry;
 end;
 
 class function TMetrics.LinearBuckets(Start, Width: double;
@@ -2286,49 +2307,49 @@ end;
 class function TMetrics.CreateCounter(Name, Help: string;
   LabelNames: TArray<string>): ICounter;
 begin
-  result := TMetricFactory(FDefaultFactory).CreateCounter(Name, Help, LabelNames);
+  result := FDefaultRegistry.MetricFactory.CreateCounter(Name, Help, LabelNames);
 end;
 
 class function TMetrics.CreateCounter(Name, Help: string;
   Configuration: ICounterConfiguration): ICounter;
 begin
-  result := FDefaultFactory.CreateCounter(Name, Help, Configuration);
+  result := FDefaultRegistry.MetricFactory.CreateCounter(Name, Help, Configuration);
 end;
 
 class function TMetrics.CreateGauge(Name, Help: string;
   Configuration: IGaugeConfiguration): IGauge;
 begin
-  result := FDefaultFactory.CreateGauge(Name, Help, Configuration);
+  result := FDefaultRegistry.MetricFactory.CreateGauge(Name, Help, Configuration);
 end;
 
 class function TMetrics.CreateGauge(Name, Help: string;
   LabelNames: TArray<string>): IGauge;
 begin
-  result := TMetricFactory(FDefaultFactory).CreateGauge(Name, Help, LabelNames);
+  result := FDefaultRegistry.MetricFactory.CreateGauge(Name, Help, LabelNames);
 end;
 
 class function TMetrics.CreateHistogram(Name, Help: string;
   Configuration: IHistogramConfiguration): IHistogram;
 begin
-  result := FDefaultFactory.CreateHistogram(Help, Name, Configuration);
+  result := FDefaultRegistry.MetricFactory.CreateHistogram(Help, Name, Configuration);
 end;
 
 class function TMetrics.CreateHistogram(Name, Help: string;
   LabelNames: TArray<string>): IHistogram;
 begin
-  result := TMetricFactory(FDefaultFactory).CreateHistogram(Name, Help, LabelNames);
+  result := FDefaultRegistry.MetricFactory.CreateHistogram(Name, Help, LabelNames);
 end;
 
 class function TMetrics.CreateSummary(Name, Help: string;
   LabelNames: TArray<string>): ISummary;
 begin
-  result := TMetricFactory(FDefaultFactory).CreateSummary(Name, Help, LabelNames);
+  result := FDefaultRegistry.MetricFactory.CreateSummary(Name, Help, LabelNames);
 end;
 
 class function TMetrics.CreateSummary(Name, Help: string;
   Configuration: ISummaryConfiguration): ISummary;
 begin
-  result := FDefaultFactory.CreateSummary(Name, Help, Configuration);
+  result := FDefaultRegistry.MetricFactory.CreateSummary(Name, Help, Configuration);
 end;
 
 class function TMetrics.NewCustomRegistry: ICollectorRegistry;
@@ -2633,6 +2654,13 @@ end;
 constructor TSummaryChild.TSampleStream.Create(Invariant: TInvariant);
 begin
   FInvariant := Invariant;
+  FSamples   := TList<TSample>.Create;
+end;
+
+destructor TSummaryChild.TSampleStream.Destroy;
+begin
+  FSamples.Free;
+  inherited;
 end;
 
 procedure TSummaryChild.TSampleStream.Merge(Samples: TList<TSample>);
@@ -2911,6 +2939,9 @@ constructor TSummaryChild.Create(Parent: TCollector; Labels,
 begin
   inherited Create(Parent, Labels, FlattenedLabels, Publish);
 
+  FBufLock := TObject.Create;
+  FLock    := TObject.Create;
+
   FObjectives := TSummary(Parent).FObjectives;
   FMaxAge     := TSummary(Parent).FMaxAge;
   FAgeBuckets := TSummary(Parent).FAgeBuckets;
@@ -2944,6 +2975,13 @@ begin
                         FObjectives[I].Quantile.ToString);
     FQuantileIdentifiers[I] := CreateIdentifier('', [TStringPair.Create('quantile', Value)]);
   end;
+end;
+
+destructor TSummaryChild.Destroy;
+begin
+  FLock.Free;
+  FBufLock.Free;
+  inherited;
 end;
 
 procedure TSummaryChild.Flush(ANow: TDateTime);
@@ -2985,7 +3023,7 @@ begin
       FHeadStreamIdx := 0;
 
     FHeadStream := FStreams[FHeadStreamIdx];
-    FHeadStreamExpTime := FHeadStreamExpTime.AddYears(FStreamDuration.Milliseconds);
+    FHeadStreamExpTime := FHeadStreamExpTime.Add(FStreamDuration);
   end;
 end;
 
@@ -3025,7 +3063,7 @@ begin
 
   // hotBuf is now empty and gets new expiration set.
   while ANow > FHotBufExpTime do
-    FHotBufExpTime := FHotBufExpTime.AddMilliseconds(FStreamDuration.Milliseconds);
+    FHotBufExpTime := FHotBufExpTime.AddMilliseconds(FStreamDuration.Ticks div 10000);
 end;
 
 {$ENDREGION}
@@ -3062,6 +3100,12 @@ begin
   finally
     List.Free;
   end;
+end;
+
+class constructor TSummary.Create;
+begin
+  FDefMaxAge := TTimeSpan.FromMinutes(10);
+  FDefObjectiveArray := [];
 end;
 
 function TSummary.GetType: TMetricType;
@@ -3139,11 +3183,12 @@ begin
     begin
       FStream.Write(Identifier, Length(Identifier));
       FStream.Write(Space, Length(Space));
-      var ValueAsString := Value.ToString;
-      var numBytes := TPrometheusConstants.ExportEncoding
-            .GetBytes(ValueAsString, 1, ValueAsString.Length, FStringBytesBuffer, 0);
+      var ValueAsString := Value.ToString.Replace(',', '.');
+//      var numBytes := TPrometheusConstants.ExportEncoding
+//            .GetBytes(ValueAsString, 1, ValueAsString.Length, FStringBytesBuffer, 0);
 
-      FStream.Write(FStringBytesBuffer, numBytes);
+      FStringBytesBuffer := TPrometheusConstants.ExportEncoding.GetBytes(ValueAsString);
+      FStream.Write(FStringBytesBuffer, Length(FStringBytesBuffer));
       FStream.Write(NewLine, Length(NewLine));
     end
   );
@@ -3544,7 +3589,7 @@ begin
 
   SetLength(FBucketIdentifiers, Length(FUpperBounds));
   for var I := 0 to Length(FUpperBounds)-1 do begin
-    var Value := ifthen(double.IsPositiveInfinity(FUpperBounds[I]), '+Inf', FUpperBounds[I].ToString);
+    var Value := ifthen(double.IsPositiveInfinity(FUpperBounds[I]), '+Inf', FUpperBounds[I].ToString.Replace(',','.'));
     FBucketIdentifiers[I] := CreateIdentifier('bucket', [TStringPair.Create('le', Value)]);
   end;
 
@@ -3678,6 +3723,14 @@ begin
       end;
     end
   ).Start;
+end;
+
+class function TPrometheusConstants.GetEncoding: TEncoding;
+begin
+  if not assigned(FEncoding) then
+    FEncoding := TEncoding.UTF8;
+
+  result := FEncoding;
 end;
 
 end.
