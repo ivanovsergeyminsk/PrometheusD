@@ -829,7 +829,7 @@ type
   private
     FCollectors: TDictionary<string, ICollector>; //Concurrent
     FStaticLabels: TArray<TPair<string, string>>;
-    FStaticLabelsLock: TObject;
+    FStaticLabelsLock: TLightweightMREW;
     FFirstCollectLock: TObject;
 
     FBeforeCollectCallbacks: TList<TProc>; //Concurrent
@@ -1874,7 +1874,6 @@ constructor TCollectorRegistry.Create;
 begin
   inherited Create;
   FFirstCollectLock := TObject.Create;
-  FStaticLabelsLock := TObject.Create;
   FCollectors       := TDictionary<string, ICollector>.Create;
   FBeforeCollectCallbacks       := TList<TProc>.Create;
   FBeforeCollectAsyncCallbacks  := TList<TFunc<ITask>>.Create;
@@ -1887,7 +1886,6 @@ begin
   FBeforeCollectAsyncCallbacks.Free;
   FCollectors.Free;
   FFirstCollectLock.Free;
-  FStaticLabelsLock.Free;
   inherited;
 end;
 
@@ -1946,7 +1944,7 @@ begin
     raise EArgumentNilException.Create('Labels');
 
   // Read lock is taken when creating metrics, so we know that no metrics can be created while we hold this lock.
-  TMonitor.Enter(FStaticLabelsLock);
+  FStaticLabelsLock.BeginWrite;
   try
     if Length(FStaticLabels) <> 0 then
       raise EInvalidOpException.Create('Static labels have already been defined - you can only do it once per registry.');
@@ -1968,14 +1966,14 @@ begin
       TMonitor.Exit(FFirstCollectLock);
     end;
   finally
-    TMonitor.Exit(FStaticLabelsLock);
+    FStaticLabelsLock.EndWrite;
   end;
 end;
 
 function TCollectorRegistry.WhileReadingStaticLabels<TReturn>(
   Action: TFunc<TLabels, TReturn>): TReturn;
 begin
-  TMonitor.Enter(FStaticLabelsLock);
+  FStaticLabelsLock.BeginRead;
   try
     var Names: TArray<string>;
     var Values: TArray<string>;
@@ -1987,7 +1985,7 @@ begin
     var Labels := TLabels.New(Names, Values);
     result := Action(Labels);
   finally
-    TMonitor.Exit(FStaticLabelsLock);
+    FStaticLabelsLock.EndRead;
   end;
 end;
 
