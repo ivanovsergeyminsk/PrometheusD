@@ -14,7 +14,7 @@ uses
   System.SysUtils,
   Winapi.Windows;
 
-{ TDebug }
+{$REGION 'TDebug'}
 
 class procedure TDebug.WriteLine(const Msg: string);
 {$IFDEF DEBUG}
@@ -27,5 +27,7 @@ begin
   OutputDebugString(PChar(LMsg));
   {$ENDIF}
 end;
+
+{$ENDREGION}
 
 end.

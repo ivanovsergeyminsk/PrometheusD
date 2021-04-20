@@ -11,12 +11,14 @@ uses
 
 type
 
+  {$IFDEF DEBUG_INTERFACE_REF}
   TDebugInterfacedObject = class abstract(TInterfacedObject)
   protected
     function QueryInterface(const IID: TGUID; out Obj): HResult; reintroduce; stdcall;
     function _AddRef: Integer; reintroduce; stdcall;
     function _Release: Integer; reintroduce; stdcall;
   end;
+  {$ENDIF}
 
 {$REGION 'Pre-declaring'}
   {$M+}
@@ -575,7 +577,11 @@ type
   /// This class packages the options for creating metrics into a single class (with subclasses per metric type)
   /// for easy extensibility of the API without adding numerous method overloads whenever new options are added.
   /// </summary>
+  {$IFDEF DEBUG_INTERFACE_REF}
   TMetricConfiguration = class abstract(TDebugInterfacedObject, IMetricConfiguration)
+  {$ELSE}
+  TMetricConfiguration = class abstract(TInterfacedObject, IMetricConfiguration)
+  {$ENDIF}
   strict private
     FLabelNames: TArray<string>;
     FStaticLabels: TDictionary<string, string>;
@@ -718,7 +724,11 @@ type
   /// <summary>
   /// Base class for metrics, defining the basic informative API and the internal API.
   /// </summary>
+  {$IFDEF DEBUG_INTERFACE_REF}
   TCollector = class abstract(TDebugInterfacedObject, ICollector)
+  {$ELSE}
+  TCollector = class abstract(TInterfacedObject, ICollector)
+  {$ENDIF}
   private const
     ValidMetricNameExpression: string   = '^[a-zA-Z_:][a-zA-Z0-9_:]*$';
     ValidLabelNameExpression: string    = '^[a-zA-Z_:][a-zA-Z0-9_:]*$';
@@ -825,7 +835,11 @@ type
   /// To encourage good concurrency practices, registries are append-only. You can add things to them but not remove.
   /// If you wish to remove things from the registry, create a new registry with only the things you wish to keep.
   /// </remarks>
+  {$IFDEF DEBUG_INTERFACE_REF}
   TCollectorRegistry = class sealed(TDebugInterfacedObject, ICollectorRegistry)
+  {$ELSE}
+  TCollectorRegistry = class sealed(TInterfacedObject, ICollectorRegistry)
+  {$ENDIF}
   private
     FCollectors: TDictionary<string, ICollector>; //Concurrent
     FStaticLabels: TArray<TPair<string, string>>;
@@ -933,7 +947,11 @@ type
   /// <summary>
   /// Adds metrics to a registry.
   /// </summary>
+  {$IFDEF DEBUG_INTERFACE_REF}
   TMetricFactory = class sealed(TDebugInterfacedObject, IMetricFactory)
+  {$ELSE}
+  TMetricFactory = class sealed(TInterfacedObject, IMetricFactory)
+  {$ENDIF}
   private
     [weak] FRegistry: ICollectorRegistry;
 
@@ -984,7 +1002,11 @@ type
   /// <summary>
   /// Base class for labeled instances of metrics (with all label names and label values defined).
   /// </summary>
+  {$IFDEF DEBUG_INTERFACE_REF}
   TChildBase = class abstract(TDebugInterfacedObject, ICollectorChild)
+  {$ELSE}
+  TChildBase = class abstract(TInterfacedObject, ICollectorChild)
+  {$ENDIF}
   private
     [weak] FParent: ICollector;
     FLabels: TLabels;
@@ -1443,7 +1465,11 @@ type
   /// <remarks>
   /// Does NOT take ownership of the stream - caller remains the boss.
   /// </remarks>
+  {$IFDEF DEBUG_INTERFACE_REF}
   TTextSerializer = class(TDebugInterfacedObject, IMetricsSerializer)
+  {$ELSE}
+  TTextSerializer = class(TInterfacedObject, IMetricsSerializer)
+  {$ENDIF}
   strict private const
     NewLine: TArray<byte> = [ord(#10)];
     Space: TArray<byte>   = [ord(' ')];
@@ -3125,6 +3151,191 @@ end;
 {$ENDREGION}
 
 
+{$REGION 'THistogram'}
+
+constructor THistogram.Create(Name, Help: string; LabelNames: TArray<string>;
+  StaticLabels: TLabels; SuppressInitialValue: boolean; Buckets: TArray<double> = []);
+begin
+  inherited Create(Name, Help, LabelNames, StaticLabels, SuppressInitialValue);
+
+  var List := TList<string>.Create;
+  try
+    List.AddRange(LabelNames);
+    if List.Contains('le') then
+      raise EArgumentException.Create('"le" is a reserved label name');
+  finally
+    List.Free;
+  end;
+
+  if Length(Buckets) = 0
+    then FBuckets := DefaultBuckets
+    else FBuckets := Buckets;
+
+  if Length(FBuckets) = 0 then
+    raise EArgumentException.Create('Histogram must have at least one bucket');
+
+  if not double.IsPositiveInfinity(FBuckets[Length(FBuckets)-1]) then begin
+    var LArr: TArray<double> := [Double.PositiveInfinity];
+    FBuckets := TArray.Concat<double>([FBuckets, LArr]);
+  end;
+
+  for var I := 1 to Length(FBuckets)-1 do begin
+    if FBuckets[I] <= FBuckets[I-1] then
+      raise EArgumentException.Create('Bucket values must be increasing');
+  end;
+end;
+
+class function THistogram.ExponentialBuckets(Start, Factor: double;
+  Count: integer): TArray<double>;
+begin
+  if Count <= 0   then raise EArgumentException.Create('ExponentialBuckets needs a positive Count');
+  if Start <= 0   then raise EArgumentException.Create('ExponentialBuckets needs a positive Start');
+  if Factor <= 1  then raise EArgumentException.Create('ExponentialBuckets needs a Factor greater than 1');
+
+  var Buckets: TArray<double>;
+  SetLength(Buckets, Count);
+
+  for var I := 0 to Length(Buckets)-1 do begin
+    Buckets[I] := Start;
+    Start := Start * Factor;
+  end;
+
+  result := Buckets;
+end;
+
+function THistogram.GetCount: Int64;
+begin
+  result := THistogramChild(Unlabelled).Count;
+end;
+
+function THistogram.GetSum: double;
+begin
+  result := THistogramChild(Unlabelled).Sum;
+end;
+
+function THistogram.GetType: TMetricType;
+begin
+  result := TMetricType.Histogram;
+end;
+
+class function THistogram.LinearBuckets(Start, Width: double;
+  Count: integer): TArray<double>;
+begin
+  if Count <= 0 then raise EArgumentException.Create('LinearBuckets needs a positive Count');
+
+  var Buckets: TArray<double>;
+  SetLength(Buckets, Count);
+
+  for var I := 0 to Length(Buckets)-1 do begin
+    Buckets[I] := Start;
+    Start := Start + width;
+  end;
+
+  result := Buckets;
+end;
+
+function THistogram.NewChild(Labels, FlattenedLabels: TLabels;
+  Publish: boolean): IHistogramChild;
+begin
+  result := THistogramChild.Create(self, labels, FlattenedLabels, Publish);
+end;
+
+procedure THistogram.Observe(Val: double);
+begin
+  THistogramChild(Unlabelled).Observe(Val);
+end;
+
+procedure THistogram.Observe(Val: double; Count: Int64);
+begin
+  THistogramChild(Unlabelled).Observe(Val, Count);
+end;
+
+{$ENDREGION}
+
+{$REGION 'THistogramChild'}
+
+function THistogramChild.CollectAndSerializeImplAsync(
+  Serializer: IMetricsSerializer): ITask;
+begin
+  result := TTask.Run(
+    procedure begin
+      // We output sum.
+      // We output count.
+      // We output each bucket in order of increasing upper bound.
+
+      TTask.WaitForAny(Serializer.WriteMetricAsync(FSumIdentifier, FSum.Value));
+
+      var SumCount: double := 0.0;
+      for var Val in FBucketCounts do
+        SumCount := SumCount + Val.Value;
+
+      TTask.WaitForAny(Serializer.WriteMetricAsync(FCountIdentifier, SumCount));
+
+      var CumulativeCount: int64 := 0;
+      for var I := 0 to Length(FBucketCounts)-1 do begin
+        CumulativeCount := CumulativeCount + FBucketCounts[I].Value;
+        TTask.WaitForAny(Serializer.WriteMetricAsync(FBucketIdentifiers[I], CumulativeCount));
+      end;
+    end
+  );
+end;
+
+constructor THistogramChild.Create(Parent: TCollector; Labels,
+  FlattenedLabels: TLabels; Publish: boolean);
+begin
+  inherited Create(Parent, Labels, FlattenedLabels, Publish);
+
+  FUpperBounds    := THistogram(Parent).FBuckets;
+  SetLength(FBucketCounts, Length(FUpperBounds));
+
+  FSumIdentifier    := CreateIdentifier('sum');
+  FCountIdentifier  := CreateIdentifier('count');
+
+  SetLength(FBucketIdentifiers, Length(FUpperBounds));
+  for var I := 0 to Length(FUpperBounds)-1 do begin
+    var Value := ifthen(double.IsPositiveInfinity(FUpperBounds[I]), '+Inf', FUpperBounds[I].ToString.Replace(',','.'));
+    FBucketIdentifiers[I] := CreateIdentifier('bucket', [TStringPair.Create('le', Value)]);
+  end;
+
+end;
+
+function THistogramChild.GetCount: int64;
+begin
+  var LCount: int64 := 0;
+  for var Val in FBucketCounts do
+    LCount := LCount + Val.Value;
+
+  result := LCount;
+end;
+
+function THistogramChild.GetSum: double;
+begin
+  result := FSum.Value;
+end;
+
+procedure THistogramChild.Observe(Value: double);
+begin
+  Observe(Value, 1);
+end;
+
+procedure THistogramChild.Observe(Value: double; Count: Int64);
+begin
+  if double.IsNan(Value) then exit;
+
+  for var I := 0 to Length(FUpperBounds)-1 do begin
+    if Value <= FUpperBounds[I] then begin
+      FBucketCounts[I].Add(Count);
+      break;
+    end;
+  end;
+
+  FSum.Add(Value * Count);
+  Publish;
+end;
+
+{$ENDREGION}
+
+
 {Serializer}
 
 {$REGION 'TTextSerializer'}
@@ -3296,7 +3507,6 @@ end;
 
 {$ENDREGION}
 
-
 {$REGION 'TLabels'}
 
 {$OVERFLOWCHECKS OFF}
@@ -3413,7 +3623,6 @@ end;
 
 {$ENDREGION}
 
-
 {$REGION 'TIf'}
 
 class function TIf.IfThen<T>(Expression: boolean; IsTrue, IsFalse: T): T;
@@ -3425,106 +3634,9 @@ end;
 
 {$ENDREGION}
 
-{ THistogram }
 
-constructor THistogram.Create(Name, Help: string; LabelNames: TArray<string>;
-  StaticLabels: TLabels; SuppressInitialValue: boolean; Buckets: TArray<double> = []);
-begin
-  inherited Create(Name, Help, LabelNames, StaticLabels, SuppressInitialValue);
-
-  var List := TList<string>.Create;
-  try
-    List.AddRange(LabelNames);
-    if List.Contains('le') then
-      raise EArgumentException.Create('"le" is a reserved label name');
-  finally
-    List.Free;
-  end;
-
-  if Length(Buckets) = 0
-    then FBuckets := DefaultBuckets
-    else FBuckets := Buckets;
-
-  if Length(FBuckets) = 0 then
-    raise EArgumentException.Create('Histogram must have at least one bucket');
-
-  if not double.IsPositiveInfinity(FBuckets[Length(FBuckets)-1]) then begin
-    var LArr: TArray<double> := [Double.PositiveInfinity];
-    FBuckets := TArray.Concat<double>([FBuckets, LArr]);
-  end;
-
-  for var I := 1 to Length(FBuckets)-1 do begin
-    if FBuckets[I] <= FBuckets[I-1] then
-      raise EArgumentException.Create('Bucket values must be increasing');
-  end;
-end;
-
-class function THistogram.ExponentialBuckets(Start, Factor: double;
-  Count: integer): TArray<double>;
-begin
-  if Count <= 0   then raise EArgumentException.Create('ExponentialBuckets needs a positive Count');
-  if Start <= 0   then raise EArgumentException.Create('ExponentialBuckets needs a positive Start');
-  if Factor <= 1  then raise EArgumentException.Create('ExponentialBuckets needs a Factor greater than 1');
-
-  var Buckets: TArray<double>;
-  SetLength(Buckets, Count);
-
-  for var I := 0 to Length(Buckets)-1 do begin
-    Buckets[I] := Start;
-    Start := Start * Factor;
-  end;
-
-  result := Buckets;
-end;
-
-function THistogram.GetCount: Int64;
-begin
-  result := THistogramChild(Unlabelled).Count;
-end;
-
-function THistogram.GetSum: double;
-begin
-  result := THistogramChild(Unlabelled).Sum;
-end;
-
-function THistogram.GetType: TMetricType;
-begin
-  result := TMetricType.Histogram;
-end;
-
-class function THistogram.LinearBuckets(Start, Width: double;
-  Count: integer): TArray<double>;
-begin
-  if Count <= 0 then raise EArgumentException.Create('LinearBuckets needs a positive Count');
-
-  var Buckets: TArray<double>;
-  SetLength(Buckets, Count);
-
-  for var I := 0 to Length(Buckets)-1 do begin
-    Buckets[I] := Start;
-    Start := Start + width;
-  end;
-
-  result := Buckets;
-end;
-
-function THistogram.NewChild(Labels, FlattenedLabels: TLabels;
-  Publish: boolean): IHistogramChild;
-begin
-  result := THistogramChild.Create(self, labels, FlattenedLabels, Publish);
-end;
-
-procedure THistogram.Observe(Val: double);
-begin
-  THistogramChild(Unlabelled).Observe(Val);
-end;
-
-procedure THistogram.Observe(Val: double; Count: Int64);
-begin
-  THistogramChild(Unlabelled).Observe(Val, Count);
-end;
-
-{ TDebugInterfacedObject }
+{$REGION 'TDebugInterfacedObject'}
+{$IFDEF DEBUG_INTERFACE_REF}
 
 function TDebugInterfacedObject.QueryInterface(const IID: TGUID;
   out Obj): HResult;
@@ -3544,90 +3656,11 @@ begin
   result := inherited;
   TDebug.WriteLine(format('_Release (%d) [%s]', [FRefCount, ClassName]));
 end;
+{$ENDIF}
 
+{$ENDREGION}
 
-{ THistogramChild }
-
-function THistogramChild.CollectAndSerializeImplAsync(
-  Serializer: IMetricsSerializer): ITask;
-begin
-  result := TTask.Run(
-    procedure begin
-      // We output sum.
-      // We output count.
-      // We output each bucket in order of increasing upper bound.
-
-      TTask.WaitForAny(Serializer.WriteMetricAsync(FSumIdentifier, FSum.Value));
-
-      var SumCount: double := 0.0;
-      for var Val in FBucketCounts do
-        SumCount := SumCount + Val.Value;
-
-      TTask.WaitForAny(Serializer.WriteMetricAsync(FCountIdentifier, SumCount));
-
-      var CumulativeCount: int64 := 0;
-      for var I := 0 to Length(FBucketCounts)-1 do begin
-        CumulativeCount := CumulativeCount + FBucketCounts[I].Value;
-        TTask.WaitForAny(Serializer.WriteMetricAsync(FBucketIdentifiers[I], CumulativeCount));
-      end;
-    end
-  );
-end;
-
-constructor THistogramChild.Create(Parent: TCollector; Labels,
-  FlattenedLabels: TLabels; Publish: boolean);
-begin
-  inherited Create(Parent, Labels, FlattenedLabels, Publish);
-
-  FUpperBounds    := THistogram(Parent).FBuckets;
-  SetLength(FBucketCounts, Length(FUpperBounds));
-
-  FSumIdentifier    := CreateIdentifier('sum');
-  FCountIdentifier  := CreateIdentifier('count');
-
-  SetLength(FBucketIdentifiers, Length(FUpperBounds));
-  for var I := 0 to Length(FUpperBounds)-1 do begin
-    var Value := ifthen(double.IsPositiveInfinity(FUpperBounds[I]), '+Inf', FUpperBounds[I].ToString.Replace(',','.'));
-    FBucketIdentifiers[I] := CreateIdentifier('bucket', [TStringPair.Create('le', Value)]);
-  end;
-
-end;
-
-function THistogramChild.GetCount: int64;
-begin
-  var LCount: int64 := 0;
-  for var Val in FBucketCounts do
-    LCount := LCount + Val.Value;
-
-  result := LCount;
-end;
-
-function THistogramChild.GetSum: double;
-begin
-  result := FSum.Value;
-end;
-
-procedure THistogramChild.Observe(Value: double);
-begin
-  Observe(Value, 1);
-end;
-
-procedure THistogramChild.Observe(Value: double; Count: Int64);
-begin
-  if double.IsNan(Value) then exit;
-
-  for var I := 0 to Length(FUpperBounds)-1 do begin
-    if Value <= FUpperBounds[I] then begin
-      FBucketCounts[I].Add(Count);
-      break;
-    end;
-  end;
-
-  FSum.Add(Value * Count);
-  Publish;
-end;
-
-{ TCounterExtensions }
+{$REGION 'TCounterExtensions'}
 
 procedure TCounterExtensions.CountExceptions(Wrapped: TProc;
   ExceptionFilter: TFunc<Exception, boolean>);
@@ -3723,6 +3756,9 @@ begin
   ).Start;
 end;
 
+{$ENDREGION}
+
+{$REGION 'TPrometheusConstants'}
 class function TPrometheusConstants.GetEncoding: TEncoding;
 begin
   if not assigned(FEncoding) then
@@ -3730,5 +3766,6 @@ begin
 
   result := FEncoding;
 end;
+{$ENDREGION}
 
 end.

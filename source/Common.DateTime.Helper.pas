@@ -102,7 +102,7 @@ implementation
 uses
   Winapi.Windows;
 
-{ TDateTimeHelper }
+{$REGION 'TDateTimeHelper'}
 
 function TDateTimeHelper.Add(const Value: TTimeSpan): TDateTime;
 begin
@@ -414,5 +414,7 @@ function TDateTimeHelper.YearsBetween(const aDateTime: TDateTime): Integer;
 begin
   Result := System.DateUtils.YearsBetween(Self, aDateTime);
 end;
+
+{$ENDREGION}
 
 end.

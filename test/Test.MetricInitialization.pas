@@ -14,8 +14,8 @@ type
     FRegistry: ICollectorRegistry;
     FMetrics: IMetricFactory;
 
-    class function NewHistogramConfiguration: THistogramConfiguration; static;
-    class function MewSummaryConfiguration: TSummaryConfiguration; static;
+//    class function NewHistogramConfiguration: THistogramConfiguration; static;
+//    class function MewSummaryConfiguration: TSummaryConfiguration; static;
   public
     [Setup]
     procedure Setup;
@@ -28,15 +28,15 @@ implementation
 { TMetricInitializationTest }
 
 
-class function TMetricInitializationTest.MewSummaryConfiguration: TSummaryConfiguration;
-begin
+//class function TMetricInitializationTest.MewSummaryConfiguration: TSummaryConfiguration;
+//begin
+//  result := nil;
+//end;
 
-end;
-
-class function TMetricInitializationTest.NewHistogramConfiguration: THistogramConfiguration;
-begin
-
-end;
+//class function TMetricInitializationTest.NewHistogramConfiguration: THistogramConfiguration;
+//begin
+//  result := nil;
+//end;
 
 procedure TMetricInitializationTest.Setup;
 begin

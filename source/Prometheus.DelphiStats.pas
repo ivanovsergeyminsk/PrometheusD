@@ -60,7 +60,7 @@ uses
   PsAPI, Windows
   ;
 
-{ TDelphiStats }
+{$REGION 'TDelphiStats'}
 
 constructor TDelphiStats.Create(Registry: ICollectorRegistry);
 begin
@@ -149,5 +149,7 @@ begin
     TMonitor.Exit(FUpdateLock);
   end;
 end;
+
+{$ENDREGION}
 
 end.

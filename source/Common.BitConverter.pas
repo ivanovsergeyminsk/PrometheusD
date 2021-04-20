@@ -198,7 +198,8 @@ resourcestring
 
 const
   DASH = '-';
-{ TBitConverter }
+
+{$REGION 'TBitConverter'}
 
 class constructor TBitConverter.Create;
 var
@@ -532,5 +533,7 @@ class function TBitConverter.ToString(value: TArray<byte>): string;
 begin
   result := TBitConverter.ToString(value, 0, length(value));
 end;
+
+{$ENDREGION}
 
 end.

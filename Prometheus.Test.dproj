@@ -151,18 +151,6 @@
         <DCCReference Include="test\Test.Gauge.pas"/>
         <DCCReference Include="test\Test.MetricInitialization.pas"/>
         <DCCReference Include="source\Prometheus.DelphiStats.pas"/>
-        <None Include="ModelSupport_Prometheus.Test\default.txaPackage"/>
-        <None Include="ModelSupport_Prometheus.Test\default.txvpck"/>
-        <None Include="ModelSupport_Prometheus.Test\Prometheus\Test\default.txaPackage"/>
-        <None Include="ModelSupport_Prometheus.Test\Prometheus\Test\default.txvpck"/>
-        <None Include="ModelSupport_Prometheus.Test\Prometheus\default.txvpck"/>
-        <None Include="ModelSupport_Prometheus.Test\Prometheus\default.txaPackage"/>
-        <None Include="ModelSupport_Prometheus.Test\Prometheus\Class Diagram.txvcls"/>
-        <None Include="ModelSupport_Prometheus.Test\Test\Labels\default.txaPackage"/>
-        <None Include="ModelSupport_Prometheus.Test\Test\Labels\default.txvpck"/>
-        <None Include="ModelSupport_Prometheus.Test\Common\default.txaPackage"/>
-        <None Include="ModelSupport_Prometheus.Test\Common\BitConverter\default.txaPackage"/>
-        <None Include="Profiling\AQtimeModule1.aqt"/>
         <BuildConfiguration Include="Release">
             <Key>Cfg_2</Key>
             <CfgParent>Base</CfgParent>
@@ -184,37 +172,7 @@
                     <Source Name="MainSource">Prometheus.Test.dpr</Source>
                 </Source>
             </Delphi.Personality>
-            <Deployment Version="3">
-                <DeployFile LocalName="ModelSupport_Prometheus.Test\Prometheus\Test\default.txaPackage" Configuration="Debug" Class="ProjectFile">
-                    <Platform Name="Win32">
-                        <RemoteDir>.\</RemoteDir>
-                        <Overwrite>true</Overwrite>
-                    </Platform>
-                </DeployFile>
-                <DeployFile LocalName="ModelSupport_Prometheus.Test\Prometheus\Test\default.txvpck" Configuration="Debug" Class="ProjectFile">
-                    <Platform Name="Win32">
-                        <RemoteDir>.\</RemoteDir>
-                        <Overwrite>true</Overwrite>
-                    </Platform>
-                </DeployFile>
-                <DeployFile LocalName="ModelSupport_Prometheus.Test\Prometheus\default.txvpck" Configuration="Debug" Class="ProjectFile">
-                    <Platform Name="Win32">
-                        <RemoteDir>.\</RemoteDir>
-                        <Overwrite>true</Overwrite>
-                    </Platform>
-                </DeployFile>
-                <DeployFile LocalName="ModelSupport_Prometheus.Test\Test\Labels\default.txaPackage" Configuration="Debug" Class="ProjectFile">
-                    <Platform Name="Win32">
-                        <RemoteDir>.\</RemoteDir>
-                        <Overwrite>true</Overwrite>
-                    </Platform>
-                </DeployFile>
-                <DeployFile LocalName="ModelSupport_Prometheus.Test\default.txaPackage" Configuration="Debug" Class="ProjectFile">
-                    <Platform Name="Win32">
-                        <RemoteDir>.\</RemoteDir>
-                        <Overwrite>true</Overwrite>
-                    </Platform>
-                </DeployFile>
+            <Deployment Version="3">                
                 <DeployFile LocalName="Win32\Debug\Prometheus.Test.exe" Configuration="Debug" Class="ProjectOutput">
                     <Platform Name="Win32">
                         <RemoteName>Prometheus_Test.exe</RemoteName>
@@ -230,51 +188,9 @@
                     <Platform Name="iOSSimulator">
                         <Overwrite>true</Overwrite>
                     </Platform>
-                </DeployFile>
-                <DeployFile LocalName="ModelSupport_Prometheus.Test\default.txvpck" Configuration="Debug" Class="ProjectFile">
-                    <Platform Name="Win32">
-                        <RemoteDir>.\</RemoteDir>
-                        <Overwrite>true</Overwrite>
-                    </Platform>
-                </DeployFile>
+                </DeployFile>               
                 <DeployFile LocalName="$(BDS)\Redist\osx32\libcgunwind.1.0.dylib" Class="DependencyModule">
                     <Platform Name="OSX32">
-                        <Overwrite>true</Overwrite>
-                    </Platform>
-                </DeployFile>
-                <DeployFile LocalName="ModelSupport_Prometheus.Test\Common\default.txaPackage" Configuration="Debug" Class="ProjectFile">
-                    <Platform Name="Win32">
-                        <RemoteDir>.\</RemoteDir>
-                        <Overwrite>true</Overwrite>
-                    </Platform>
-                </DeployFile>
-                <DeployFile LocalName="Profiling\AQtimeModule1.aqt" Configuration="Debug" Class="ProjectFile">
-                    <Platform Name="Win32">
-                        <RemoteDir>.\</RemoteDir>
-                        <Overwrite>true</Overwrite>
-                    </Platform>
-                </DeployFile>
-                <DeployFile LocalName="ModelSupport_Prometheus.Test\Prometheus\Class Diagram.txvcls" Configuration="Debug" Class="ProjectFile">
-                    <Platform Name="Win32">
-                        <RemoteDir>.\</RemoteDir>
-                        <Overwrite>true</Overwrite>
-                    </Platform>
-                </DeployFile>
-                <DeployFile LocalName="ModelSupport_Prometheus.Test\Prometheus\default.txaPackage" Configuration="Debug" Class="ProjectFile">
-                    <Platform Name="Win32">
-                        <RemoteDir>.\</RemoteDir>
-                        <Overwrite>true</Overwrite>
-                    </Platform>
-                </DeployFile>
-                <DeployFile LocalName="ModelSupport_Prometheus.Test\Test\Labels\default.txvpck" Configuration="Debug" Class="ProjectFile">
-                    <Platform Name="Win32">
-                        <RemoteDir>.\</RemoteDir>
-                        <Overwrite>true</Overwrite>
-                    </Platform>
-                </DeployFile>
-                <DeployFile LocalName="ModelSupport_Prometheus.Test\Common\BitConverter\default.txaPackage" Configuration="Debug" Class="ProjectFile">
-                    <Platform Name="Win32">
-                        <RemoteDir>.\</RemoteDir>
                         <Overwrite>true</Overwrite>
                     </Platform>
                 </DeployFile>
