@@ -1,4 +1,4 @@
-unit Test.Gauge;
+﻿unit Test.Gauge;
 
 interface
 

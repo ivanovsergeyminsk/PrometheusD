@@ -1,4 +1,4 @@
-unit Test.MetricInitialization;
+﻿unit Test.MetricInitialization;
 
 interface
 

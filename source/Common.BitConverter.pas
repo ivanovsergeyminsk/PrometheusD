@@ -1,4 +1,4 @@
-unit Common.BitConverter;
+﻿unit Common.BitConverter;
 
 interface
 type

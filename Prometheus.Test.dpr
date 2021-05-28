@@ -1,4 +1,4 @@
-program Prometheus.Test;
+﻿program Prometheus.Test;
 
 {$IFNDEF TESTINSIGHT}
 {$APPTYPE CONSOLE}

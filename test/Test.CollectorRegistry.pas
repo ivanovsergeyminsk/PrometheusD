@@ -1,4 +1,4 @@
-unit Test.CollectorRegistry;
+﻿unit Test.CollectorRegistry;
 
 interface
 

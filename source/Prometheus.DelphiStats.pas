@@ -1,4 +1,4 @@
-unit Prometheus.DelphiStats;
+п»їunit Prometheus.DelphiStats;
 
 interface
 uses
@@ -18,14 +18,14 @@ type
     L_MEASURE = 'measure';
     L_DESC    = 'description';
     MEASURE   = 'KB';
-    DESC_PeakWorkingSetSize         = 'Пиковый размер рабочего набора';
-    DESC_WorkingSetSize             = 'Текущий размер рабочего набора';
-    DESC_QuotaPeakPagedPoolUsage    = 'Пиковое использование выгружаемого пула';
-    DESC_QuotaPagedPoolUsage        = 'Текущее использование выгружаемого пула';
-    DESC_QuotaPeakNonPagedPoolUsage = 'Пиковое использование невыгружаемого пула';
-    DESC_QuotaNonPagedPoolUsage     = 'Текущее использование невыгружаемого пула';
-    DESC_PagefileUsage              = 'Общий объем памяти, выделенный диспетчером памяти';
-    DESC_PeakPagefileUsage          = 'Пиковый объем памяти, выделенный диспетчером памяти';
+    DESC_PeakWorkingSetSize         = 'РџРёРєРѕРІС‹Р№ СЂР°Р·РјРµСЂ СЂР°Р±РѕС‡РµРіРѕ РЅР°Р±РѕСЂР°';
+    DESC_WorkingSetSize             = 'РўРµРєСѓС‰РёР№ СЂР°Р·РјРµСЂ СЂР°Р±РѕС‡РµРіРѕ РЅР°Р±РѕСЂР°';
+    DESC_QuotaPeakPagedPoolUsage    = 'РџРёРєРѕРІРѕРµ РёСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ РІС‹РіСЂСѓР¶Р°РµРјРѕРіРѕ РїСѓР»Р°';
+    DESC_QuotaPagedPoolUsage        = 'РўРµРєСѓС‰РµРµ РёСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ РІС‹РіСЂСѓР¶Р°РµРјРѕРіРѕ РїСѓР»Р°';
+    DESC_QuotaPeakNonPagedPoolUsage = 'РџРёРєРѕРІРѕРµ РёСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ РЅРµРІС‹РіСЂСѓР¶Р°РµРјРѕРіРѕ РїСѓР»Р°';
+    DESC_QuotaNonPagedPoolUsage     = 'РўРµРєСѓС‰РµРµ РёСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ РЅРµРІС‹РіСЂСѓР¶Р°РµРјРѕРіРѕ РїСѓР»Р°';
+    DESC_PagefileUsage              = 'РћР±С‰РёР№ РѕР±СЉРµРј РїР°РјСЏС‚Рё, РІС‹РґРµР»РµРЅРЅС‹Р№ РґРёСЃРїРµС‚С‡РµСЂРѕРј РїР°РјСЏС‚Рё';
+    DESC_PeakPagefileUsage          = 'РџРёРєРѕРІС‹Р№ РѕР±СЉРµРј РїР°РјСЏС‚Рё, РІС‹РґРµР»РµРЅРЅС‹Р№ РґРёСЃРїРµС‚С‡РµСЂРѕРј РїР°РјСЏС‚Рё';
 
   private
     FPeakWorkingSetSize: IGauge;
@@ -68,43 +68,43 @@ begin
   Metrics := TMetrics.WithCustomRegistry(Registry);
 
   FPeakWorkingSetSize := Metrics.CreateGauge('process_memory_PeakWorkingSetSize',
-                                             'Пиковый размер рабочего набора',
+                                             'РџРёРєРѕРІС‹Р№ СЂР°Р·РјРµСЂ СЂР°Р±РѕС‡РµРіРѕ РЅР°Р±РѕСЂР°',
                                              [L_DESC, L_MEASURE]);
   FWorkingSetSize := Metrics.CreateGauge('process_memory_WorkingSetSize',
-                                         'Текущий размер рабочего набора',
+                                         'РўРµРєСѓС‰РёР№ СЂР°Р·РјРµСЂ СЂР°Р±РѕС‡РµРіРѕ РЅР°Р±РѕСЂР°',
                                          [L_DESC, L_MEASURE]);
 
   FQuotaPeakPagedPoolUsage := Metrics.CreateGauge('process_memory_QuotaPeakPagedPoolUsage',
-                                                  'Пиковое использование выгружаемого пула',
+                                                  'РџРёРєРѕРІРѕРµ РёСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ РІС‹РіСЂСѓР¶Р°РµРјРѕРіРѕ РїСѓР»Р°',
                                                   [L_DESC, L_MEASURE]);
 
   FQuotaPagedPoolUsage := Metrics.CreateGauge('process_memory_QuotaPagedPoolUsage',
-                                              'Текущее использование выгружаемого пула',
+                                              'РўРµРєСѓС‰РµРµ РёСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ РІС‹РіСЂСѓР¶Р°РµРјРѕРіРѕ РїСѓР»Р°',
                                               [L_DESC, L_MEASURE]);
 
   FQuotaPeakNonPagedPoolUsage := Metrics.CreateGauge('process_memory_QuotaPeakNonPagedPoolUsage',
-                                                     'Пиковое использование невыгружаемого пула',
+                                                     'РџРёРєРѕРІРѕРµ РёСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ РЅРµРІС‹РіСЂСѓР¶Р°РµРјРѕРіРѕ РїСѓР»Р°',
                                                      [L_DESC, L_MEASURE]);
 
   FQuotaNonPagedPoolUsage := Metrics.CreateGauge('process_memory_QuotaNonPagedPoolUsage',
-                                                 'Текущее использование невыгружаемого пула',
+                                                 'РўРµРєСѓС‰РµРµ РёСЃРїРѕР»СЊР·РѕРІР°РЅРёРµ РЅРµРІС‹РіСЂСѓР¶Р°РµРјРѕРіРѕ РїСѓР»Р°',
                                                  [L_DESC, L_MEASURE]);
 
   FPagefileUsage := Metrics.CreateGauge('process_memory_PagefileUsage',
-                                        'Общий объем памяти, выделенный диспетчером памяти',
+                                        'РћР±С‰РёР№ РѕР±СЉРµРј РїР°РјСЏС‚Рё, РІС‹РґРµР»РµРЅРЅС‹Р№ РґРёСЃРїРµС‚С‡РµСЂРѕРј РїР°РјСЏС‚Рё',
                                         [L_DESC, L_MEASURE]);
 
   FPeakPagefileUsage := Metrics.CreateGauge('process_memory_PeakPagefileUsage',
-                                            'Пиковый объем памяти, выделенный диспетчером памяти',
+                                            'РџРёРєРѕРІС‹Р№ РѕР±СЉРµРј РїР°РјСЏС‚Рё, РІС‹РґРµР»РµРЅРЅС‹Р№ РґРёСЃРїРµС‚С‡РµСЂРѕРј РїР°РјСЏС‚Рё',
                                             [L_DESC, L_MEASURE]);
 
 
-  FRequestCount := Metrics.CreateCounter('delphi_metric_req', 'Количество запросов метрики');
+  FRequestCount := Metrics.CreateCounter('delphi_metric_req', 'РљРѕР»РёС‡РµСЃС‚РІРѕ Р·Р°РїСЂРѕСЃРѕРІ РјРµС‚СЂРёРєРё');
 
-  TestCounter  := Metrics.CreateCounter('delhi_test_counter', 'Тест counter');
-  TestGauge    := Metrics.CreateGauge('delhi_test_gauge', 'Тест gauge');
-  TestSummary  := Metrics.CreateSummary('delhi_test_summary', 'Тест summary');
-  TestHitogram := Metrics.CreateHistogram('delhi_test_histogram', 'Тест histogram');
+  TestCounter  := Metrics.CreateCounter('delhi_test_counter', 'РўРµСЃС‚ counter');
+  TestGauge    := Metrics.CreateGauge('delhi_test_gauge', 'РўРµСЃС‚ gauge');
+  TestSummary  := Metrics.CreateSummary('delhi_test_summary', 'РўРµСЃС‚ summary');
+  TestHitogram := Metrics.CreateHistogram('delhi_test_histogram', 'РўРµСЃС‚ histogram');
   Registry.AddBeforeCollectorCallback(UpdateMetrics);
 end;
 

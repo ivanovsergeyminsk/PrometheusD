@@ -1,4 +1,4 @@
-unit Common.Debug;
+﻿unit Common.Debug;
 
 interface
 

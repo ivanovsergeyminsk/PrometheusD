@@ -1,4 +1,4 @@
-program TestServer;
+﻿program TestServer;
 
 uses
   System.StartUpCopy,
