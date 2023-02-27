@@ -45,7 +45,7 @@ begin
   end;
 
   Assert.Contains(text, Canary);
-  Assert.Contains(text, CanaryValue.ToString);
+  Assert.Contains(text, CanaryValue.ToString.Replace(',','.'));
 end;
 
 initialization
