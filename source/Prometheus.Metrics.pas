@@ -1910,13 +1910,13 @@ begin
   TTask.WaitForAll(ACalls);
 
   //Мало ли кому взбередет в голову сниматать показания с одного приложения в разных потоках!
-  TMonitor.Enter(self);
-  try
+//  TMonitor.Enter(self);
+//  try
     for var Collector: ICollector in FCollectors.Values do
       TCollector(Collector).CollectAndSerialize(Serializer);
-  finally
-    TMonitor.Exit(self)
-  end;
+//  finally
+//    TMonitor.Exit(self)
+//  end;
 end;
 
 function TCollectorRegistry.CollectAndSerializeAsync(
