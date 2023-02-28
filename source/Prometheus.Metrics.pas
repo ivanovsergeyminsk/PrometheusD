@@ -2,11 +2,12 @@
 
 interface
 uses
-  System.Classes,
-  System.SysUtils,
-  System.Threading,
-  System.Generics.Collections,
-  System.TimeSpan
+    System.Classes
+  , System.SysUtils
+  , System.Threading
+  , System.SyncObjs
+  , System.Generics.Collections
+  , System.TimeSpan
   ;
 
 type
@@ -407,8 +408,8 @@ type
 
   TThreadSafeDouble = record
   private
-    FValue: Int64;
-
+    FValue: double;
+    FMREW: TLightweightMREW;
     function GetValue: double;
     procedure SetValue(AValue: double);
   public
@@ -704,19 +705,14 @@ type
 
 implementation
 uses
-  System.Generics.Defaults,
-  System.RegularExpressions,
-  System.StrUtils,
-  System.DateUtils,
-  System.Rtti,
-  System.SyncObjs,
-  System.Math,
-  Winapi.Windows,
-  Common.BitConverter,
-  Common.Debug,
-  Common.DateTime.Helper,
-
-  Prometheus.DelphiStats
+    System.Generics.Defaults
+  , System.RegularExpressions
+  , System.StrUtils
+  , System.DateUtils
+  , System.Rtti
+  , System.Math
+  , Winapi.Windows
+  , Prometheus.DelphiStats
   ;
 
 type
@@ -2963,7 +2959,7 @@ begin
   // We output count.
   // We output quantiles.
 
-  var LNow          := TDateTime.UtcNow;
+  var LNow          := TDateTime.NowUTC;
   var Count: double;
   var Sum: double;
   var Values        := TList<TQuantileEpsilonPair>.Create;
@@ -3012,8 +3008,11 @@ begin
   SetLength(FSortedObjectives, FObjectives.Count);
   FHotBuf   := TSampleBuffer.Create(FBufCap);
   FColdBuf  := TSampleBuffer.Create(FBufCap);
+
   FStreamDuration     := TTimeSpan.Create(FMaxAge.Ticks div FAgeBuckets);
-  FHeadStreamExpTime  := TDateTime.UtcNow.Add(FStreamDuration);
+  FHeadStreamExpTime  := TDateTime.NowUTC;
+  FHeadStreamExpTime.AddMilliSecond(FStreamDuration.Ticks div TTimeSpan.TicksPerMillisecond);
+
   FHotBufExpTime      := FHeadStreamExpTime;
 
   SetLength(FStreams, FAgeBuckets);
@@ -3077,7 +3076,7 @@ end;
 
 procedure TSummaryChild.MaybeRotateStreams;
 begin
-  while not FHotBufExpTime.Equals(FHeadStreamExpTime) do begin
+  while not FHotBufExpTime.SameDateTime(FHeadStreamExpTime) do begin
     FHeadStream.Reset;
     Inc(FHeadStreamIdx);
 
@@ -3085,13 +3084,13 @@ begin
       FHeadStreamIdx := 0;
 
     FHeadStream := FStreams[FHeadStreamIdx];
-    FHeadStreamExpTime := FHeadStreamExpTime.Add(FStreamDuration);
+    FHeadStreamExpTime.AddMilliSecond(FStreamDuration.Ticks div TTimeSpan.TicksPerMillisecond);
   end;
 end;
 
 procedure TSummaryChild.Observe(Value: double);
 begin
-  Observe(Value, TDateTime.UtcNow);
+  Observe(Value, TDateTime.NowUTC);
 end;
 
 procedure TSummaryChild.Observe(Value: double; ANow: TDateTime);
@@ -3125,7 +3124,7 @@ begin
 
   // hotBuf is now empty and gets new expiration set.
   while ANow > FHotBufExpTime do
-    FHotBufExpTime := FHotBufExpTime.AddMilliseconds(FStreamDuration.Ticks div 10000);
+    FHotBufExpTime.AddMillisecond(FStreamDuration.Ticks div 10000);
 end;
 
 {$ENDREGION}
@@ -3454,54 +3453,69 @@ end;
 
 procedure TThreadSafeDouble.Add(AValue: double);
 begin
-  while True do begin
-    var InitialValue: int64   := FValue;
-    var ComputedValue: double := TBitConverter.Int64BitsToDouble(InitialValue)+AValue;
-
-    if (InitialValue = TInterlocked.CompareExchange(FValue, TBitConverter.DoubleToInt64Bits(ComputedValue), InitialValue)) then
-      exit;
+  FMREW.BeginWrite;
+  try
+    FValue := FValue + AValue;
+  finally
+    FMREW.EndWrite;
   end;
 end;
 
 procedure TThreadSafeDouble.DecrementTo(AValue: double);
 begin
+  FMREW.BeginWrite;
+  try
+    if FValue <= AValue then exit; //Already less.
+    FValue := AValue;
+  finally
+    FMREW.EndWrite;
+  end;
+
   while true do begin
-    var InitialRaw: int64     := FValue;
-    var InitialValue: double  := TBitConverter.Int64BitsToDouble(InitialRaw);
+    var InitialRaw: double    := FValue;
+    var InitialValue: double  := InitialRaw;
 
     if InitialValue <= AValue then exit; //Already greater.
 
-    if (InitialRaw = TInterlocked.CompareExchange(FValue, TBitConverter.DoubleToInt64Bits(AValue), InitialRaw)) then
+    if InitialRaw = TInterlocked.CompareExchange(FValue, AValue, InitialRaw) then
       exit;
   end;
 end;
 
 function TThreadSafeDouble.GetValue: double;
 begin
-  result := TBitConverter.Int64BitsToDouble(TInterlocked.Read(FValue));
+  FMREW.BeginRead;
+  try
+    result := FValue;
+  finally
+    FMREW.EndRead
+  end;
 end;
 
 procedure TThreadSafeDouble.IncrementTo(AValue: double);
 begin
-  while true do begin
-    var InitialRaw: int64     := FValue;
-    var InitialValue: double  := TBitConverter.Int64BitsToDouble(InitialRaw);
-
-    if InitialValue >= AValue then exit; //Already greater.
-
-    if (InitialRaw = TInterlocked.CompareExchange(FValue, TBitConverter.DoubleToInt64Bits(AValue), InitialRaw))then
-      exit;
+  FMREW.BeginWrite;
+  try
+    if FValue >= AValue then exit; //Already greater.
+    FValue := AValue;
+  finally
+    FMREW.EndWrite;
   end;
 end;
 
 constructor TThreadSafeDouble.New(AValue: double);
 begin
-  FValue := TBitConverter.DoubleToInt64Bits(AValue);
+  FValue := AValue;
 end;
 
 procedure TThreadSafeDouble.SetValue(AValue: double);
 begin
-  TInterlocked.Exchange(FValue, TBitConverter.DoubleToInt64Bits(AValue));
+  FMREW.BeginWrite;
+  try
+    FValue := AValue;
+  finally
+    FMREW.EndWrite;
+  end;
 end;
 
 {$ENDREGION}

@@ -6,10 +6,9 @@ uses
   View.Main in 'View.Main.pas' {FormMain},
   Prometheus.DelphiStats in '..\..\source\Prometheus.DelphiStats.pas',
   Prometheus.Metrics in '..\..\source\Prometheus.Metrics.pas',
-  Prometheus.Servers in '..\..\source\Prometheus.Servers.pas',
-  Common.BitConverter in '..\..\source\Common.BitConverter.pas',
-  Common.DateTime.Helper in '..\..\source\Common.DateTime.Helper.pas',
-  Common.Debug in '..\..\source\Common.Debug.pas';
+  Prometheus.Server in '..\..\source\Prometheus.Server.pas',
+  Prometheus.Server.Pusher in '..\..\source\Prometheus.Server.Pusher.pas',
+  Prometheus.Server.Exporter in '..\..\source\Prometheus.Server.Exporter.pas';
 
 {$R *.res}
 

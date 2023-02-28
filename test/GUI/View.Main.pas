@@ -9,7 +9,7 @@ uses
 
   System.Threading,
   Prometheus.Metrics,
-  Prometheus.Servers,
+  Prometheus.Server,
   Prometheus.DelphiStats, FMX.Edit
   ;
 
@@ -44,6 +44,10 @@ var
   FormMain: TFormMain;
 
 implementation
+
+uses
+    Prometheus.Server.Exporter
+  ;
 
 {$R *.fmx}
 

@@ -14,16 +14,15 @@ uses
   DUnitX.TestFramework,
   Test.Labels in 'test\Test.Labels.pas',
   Prometheus.Metrics in 'source\Prometheus.Metrics.pas',
-  Common.BitConverter in 'source\Common.BitConverter.pas',
-  Prometheus.Servers in 'source\Prometheus.Servers.pas',
-  Common.Debug in 'source\Common.Debug.pas',
-  Common.DateTime.Helper in 'source\Common.DateTime.Helper.pas',
   Test.Metrics in 'test\Test.Metrics.pas',
   Test.CollectorRegistry in 'test\Test.CollectorRegistry.pas',
   Test.Counter in 'test\Test.Counter.pas',
   Test.Gauge in 'test\Test.Gauge.pas',
   Test.MetricInitialization in 'test\Test.MetricInitialization.pas',
-  Prometheus.DelphiStats in 'source\Prometheus.DelphiStats.pas';
+  Prometheus.DelphiStats in 'source\Prometheus.DelphiStats.pas',
+  Prometheus.Server in 'source\Prometheus.Server.pas',
+  Prometheus.Server.Pusher in 'source\Prometheus.Server.Pusher.pas',
+  Prometheus.Server.Exporter in 'source\Prometheus.Server.Exporter.pas';
 
 //{$IFNDEF TESTINSIGHT}
 {$IFNDEF TESTINSIGHT}
