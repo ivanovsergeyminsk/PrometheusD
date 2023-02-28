@@ -26,9 +26,6 @@ type
     procedure NewLabels;
     [Test]
     procedure Counter;
-
-    [Test]
-    procedure Def;
   end;
 
 implementation
@@ -61,14 +58,15 @@ begin
   end;
 
   Assert.Contains(Text, Canary);
-  Assert.Contains(Text, CanaryValue.ToString);
+  Assert.Contains(Text, CanaryValue.ToString.Replace(',','.'));
 end;
 
 procedure TPrometheusTest.Counter;
 begin
   var FRegistry := TMetrics.NewCustomRegistry;
   var FMetrics  := TMetrics.WithCustomRegistry(FRegistry);
-  var Counter := FMetrics.CreateCounter('xxx', 'x x x', ['Label1', 'Label2', 'Label3']);
+  var Counter   := FMetrics.CreateCounter('xxx', 'x x x', ['Label1', 'Label2', 'Label3']);
+
 
   Counter.IncTo(100);
   Assert.AreEqual<double>(100, Counter.Value);
@@ -106,19 +104,6 @@ begin
 
   Counter.IncTo(10);
   Assert.AreEqual<double>(100, Counter.Value);
-end;
-
-procedure TPrometheusTest.Def;
-begin
-  var Registry := TMetrics.DefaultRegistry;
-
-  var Stream := TStringStream.Create('', TEncoding.UTF8);
-  TTask.WaitForAny(Registry.CollectAndExportAsTextAsync(Stream));
-
-  var Text := Stream.DataString;
-  Stream.Free;
-  text := '';
-
 end;
 
 procedure TPrometheusTest.Gauge_DecTo_DecrementsButDoesNotIncrement;

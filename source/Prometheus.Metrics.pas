@@ -201,6 +201,17 @@ type
     function CollectAndSerializeAsync(Serializer: IMetricsSerializer): ITask;
 
     /// <summary>
+    /// Collects all metrics and exports them in text document format to the provided stream.
+    ///
+    /// This method is designed to be used with custom output mechanisms that do not use an IMetricServer.
+    /// </summary>
+    procedure CollectAndExportAsText(Dest: TStream);
+    /// <summary>
+    /// Collects metrics from all the registered collectors and sends them to the specified serializer.
+    /// </summary>
+    procedure CollectAndSerialize(Serializer: IMetricsSerializer);
+
+    /// <summary>
     /// Adds metrics to a registry.
     /// </summary>
     function MetricFactory: IMetricFactory;
@@ -361,8 +372,8 @@ type
   end;
 
   IMetricsSerializer = interface
-    function WriteMetricAsync(Identifier: TArray<byte>; Value: double): ITask;
-    function WriteFamilyDeclarationAsync(HeaderLines: TArray < TArray < byte >> ): ITask;
+    procedure WriteMetric(Identifier: TArray<byte>; Value: double);
+    procedure WriteFamilyDeclaration(HeaderLines: TArray<TArray<byte>>);
   end;
 
 
@@ -749,8 +760,7 @@ type
   protected
     constructor Create(Name, Help: string; LabelNames: TArray<string>);
     /// <directed>True</directed>
-    function CollectAndSerializeAsync(Serializer: IMetricsSerializer): ITask;
-      virtual; abstract;
+    procedure CollectAndSerialize(Serializer: IMetricsSerializer); virtual; abstract;
     // Used by ChildBase.Remove()
     procedure RemoveLabelled(Lables: TLabels); virtual; abstract;
     class procedure ValidateLabelName(LabelName: string);
@@ -803,7 +813,7 @@ type
     function GetType: TMetricType; virtual; abstract;
     property &Type: TMetricType read GetType;
 
-    function CollectAndSerializeAsync(Serializer: IMetricsSerializer): ITask; override;
+    procedure CollectAndSerialize(Serializer: IMetricsSerializer); override;
   public
     destructor Destroy; override;
     function Labels(LabelValues: TArray<string>): TICollectorChild;
@@ -891,6 +901,11 @@ type
     /// Collects metrics from all the registered collectors and sends them to the specified serializer.
     /// </summary>
     function CollectAndSerializeAsync(Serializer: IMetricsSerializer): ITask;
+
+    /// <summary>
+    /// Collects metrics from all the registered collectors and sends them to the specified serializer.
+    /// </summary>
+    procedure CollectAndSerialize(Serializer: IMetricsSerializer);
   public
     destructor Destroy; override;
     /// <summary>
@@ -938,6 +953,13 @@ type
     /// This method is designed to be used with custom output mechanisms that do not use an IMetricServer.
     /// </summary>
     function CollectAndExportAsTextAsync(Dest: TStream): ITask;
+
+    /// <summary>
+    /// Collects all metrics and exports them in text document format to the provided stream.
+    ///
+    /// This method is designed to be used with custom output mechanisms that do not use an IMetricServer.
+    /// </summary>
+    procedure CollectAndExportAsText(Dest: TStream);
     /// <summary>
     /// Adds metrics to a registry.
     /// </summary>
@@ -1031,9 +1053,10 @@ type
     /// <remarks>
     /// Subclass must check _publish and suppress output if it is false.
     /// </remarks>
-    function CollectAndSerializeAsync(Serializer: IMetricsSerializer): ITask;
+    procedure CollectAndSerialize(Serializer: IMetricsSerializer);
+
     // Same as above, just only called if we really need to serialize this metric (if publish is true).
-    function CollectAndSerializeImplAsync(Serializer: IMetricsSerializer): ITask; virtual; abstract;
+    procedure CollectAndSerializeImpl(Serializer: IMetricsSerializer); virtual; abstract;
     /// <summary>
     /// Creates a metric identifier, with an optional name postfix and optional extra labels.
     /// familyname_postfix{labelkey1="labelvalue1",labelkey2="labelvalue2"}
@@ -1073,7 +1096,7 @@ type
     function GetValue: double;
   protected
     constructor Create(Parent: TCollector; Labels, FlattenedLabels: TLabels; Publish: boolean);
-    function CollectAndSerializeImplAsync(Serializer: IMetricsSerializer): ITask; override;
+    procedure CollectAndSerializeImpl(Serializer: IMetricsSerializer); override;
   public
     procedure Inc(Increment: double = 1.0);
     procedure IncTo(TargetValue: double);
@@ -1106,7 +1129,7 @@ type
     function GetValue: double;
   protected
     constructor Create(Parent: TCollector; Labels, FlattenedLabels: TLabels; Publish: boolean);
-    function CollectAndSerializeImplAsync(Serializer: IMetricsSerializer): ITask; override;
+    procedure CollectAndSerializeImpl(Serializer: IMetricsSerializer); override;
   public
     procedure &Set(Val: double);
     procedure IncTo(TargetValue: double);
@@ -1308,7 +1331,7 @@ type
   protected
     constructor Create(Parent: TCollector; Labels, FlattenedLabels: TLabels; Publish: boolean);
     destructor Destroy; override;
-    function CollectAndSerializeImplAsync(Serializer: IMetricsSerializer): ITask; override;
+    procedure CollectAndSerializeImpl(Serializer: IMetricsSerializer); override;
     /// <summary>
     /// For unit tests only
     /// </summary>
@@ -1376,7 +1399,7 @@ type
     function GetCount: int64;
   protected
     constructor Create(Parent: TCollector; Labels, FlattenedLabels: TLabels; Publish: boolean);
-    function CollectAndSerializeImplAsync(Serializer: IMetricsSerializer): ITask; override;
+    procedure CollectAndSerializeImpl(Serializer: IMetricsSerializer); override;
   public
     property Sum: double read GetSum;
     property Count: int64 read GetCount;
@@ -1491,9 +1514,9 @@ type
 
     // # HELP name help
     // # TYPE name type
-    function WriteFamilyDeclarationAsync(HeaderLines: TArray<TArray<byte>>): ITask;
+    procedure WriteFamilyDeclaration(HeaderLines: TArray<TArray<byte>>);
     // name{labelkey1="labelvalue1",labelkey2="labelvalue2"} 123.456
-    function WriteMetricAsync(Identifier: TArray<byte>; value: double): ITask;
+    procedure WriteMetric(Identifier: TArray<byte>; Value: double);
   end;
 
 {$ENDREGION}
@@ -1564,24 +1587,20 @@ end;
 
 {$REGION 'TCollector<TChild>'}
 
-function TCollector<TICollectorChild>.CollectAndSerializeAsync(
-  Serializer: IMetricsSerializer): ITask;
+procedure TCollector<TICollectorChild>.CollectAndSerialize(
+  Serializer: IMetricsSerializer);
+  var Child: TICollectorChild;
 begin
-  result := TTask.Run(
-    procedure
-      var Child: TICollectorChild;
-    begin
-      EnsureUnlabelledMetricCreatedIfNoLabels;
+  EnsureUnlabelledMetricCreatedIfNoLabels;
 
-      TTask.WaitForAny(Serializer.WriteFamilyDeclarationAsync(FFamilyHeaderLines));
-      TMonitor.Enter(FLabelledMetrics);
-      try
-        for Child in FLabelledMetrics.Values do //inline variable don't set nil
-          TTask.WaitForAny(TChildBase(Child).CollectAndSerializeAsync(Serializer));
-      finally
-        TMonitor.Exit(FLabelledMetrics);
-      end;
-    end);
+  Serializer.WriteFamilyDeclaration(FFamilyHeaderLines);
+  TMonitor.Enter(FLabelledMetrics);
+  try
+    for Child in FLabelledMetrics.Values do //inline variable don't set nil
+      TChildBase(Child).CollectAndSerialize(Serializer);
+  finally
+    TMonitor.Exit(FLabelledMetrics);
+  end;
 end;
 
 constructor TCollector<TICollectorChild>.Create(Name, Help: string;
@@ -1733,15 +1752,10 @@ end;
 
 {$REGION 'TChildBase'}
 
-function TChildBase.CollectAndSerializeAsync(
-  Serializer: IMetricsSerializer): ITask;
+procedure TChildBase.CollectAndSerialize(Serializer: IMetricsSerializer);
 begin
-  if FPublish then begin
-    result := CollectAndSerializeImplAsync(Serializer);
-  end else begin
-    result := TTask.Run(procedure begin end);
-    TTask.WaitForAny(result);
-  end;
+  if FPublish then
+    CollectAndSerializeImpl(Serializer);
 end;
 
 constructor TChildBase.Create(Parent: ICollector; Labels,
@@ -1841,6 +1855,17 @@ begin
   end;
 end;
 
+procedure TCollectorRegistry.CollectAndExportAsText(Dest: TStream);
+var
+  Serializer: IMetricsSerializer;
+begin
+  if not assigned(Dest) then
+    raise EArgumentNilException.Create('Dest');
+
+  Serializer := TTextSerializer.Create(Dest);
+  CollectAndSerialize(Serializer);
+end;
+
 function TCollectorRegistry.CollectAndExportAsTextAsync(Dest: TStream): ITask;
 var
   Serializer: IMetricsSerializer;
@@ -1852,46 +1877,66 @@ begin
   result := CollectAndSerializeAsync(Serializer);
 end;
 
+procedure TCollectorRegistry.CollectAndSerialize(
+  Serializer: IMetricsSerializer);
+begin
+  TMonitor.Enter(FFirstCollectLock);
+  try
+    if not FHasPerformedFirstCollect then begin
+      FHasPerformedFirstCollect := true;
+      if assigned(FBeforeFirstCollectCallback) then
+        FBeforeFirstCollectCallback();
+        FBeforeFirstCollectCallback := nil;
+    end;
+  finally
+    TMonitor.Exit(FFirstCollectLock);
+  end;
+
+  TMonitor.Enter(FBeforeCollectCallbacks);
+  try
+    for var Callback: TProc in FBeforeCollectCallbacks do
+      if assigned(Callback) then Callback();
+  finally
+    TMonitor.Exit(FBeforeCollectCallbacks);
+  end;
+
+  var ACalls: TArray<ITask>;
+  TMonitor.Enter(FBeforeCollectAsyncCallbacks);
+  try
+    for var AsyncCallback: TFunc<ITask> in FBeforeCollectAsyncCallbacks do begin
+      if not assigned(AsyncCallback) then continue;
+      ACalls := ACalls+[AsyncCallback()];
+    end;
+  finally
+    TMonitor.Exit(FBeforeCollectAsyncCallbacks);
+  end;
+
+  TTask.WaitForAll(ACalls);
+
+  //Мало ли кому взбередет в голову сниматать показания с одного приложения в разных потоках!
+  TMonitor.Enter(self);
+  try
+    for var Collector: ICollector in FCollectors.Values do
+      TCollector(Collector).CollectAndSerialize(Serializer);
+  finally
+    TMonitor.Exit(self)
+  end;
+end;
+
 function TCollectorRegistry.CollectAndSerializeAsync(
   Serializer: IMetricsSerializer): ITask;
 begin
   result := TTask.Run(
     procedure begin
-      TMonitor.Enter(FFirstCollectLock);
-      try
-        if not FHasPerformedFirstCollect then begin
-          FHasPerformedFirstCollect := true;
-          if assigned(FBeforeFirstCollectCallback) then
-            FBeforeFirstCollectCallback();
-            FBeforeFirstCollectCallback := nil;
-        end;
-      finally
-        TMonitor.Exit(FFirstCollectLock);
-      end;
+      {$IFDEF DEBUG}
+      TThread.Current.NameThreadForDebugging('Task TCollectorRegistry.CollectAndSerializeAsync');
+      {$ENDIF}
 
-      TMonitor.Enter(FBeforeCollectCallbacks);
-      try
-        for var Callback: TProc in FBeforeCollectCallbacks do
-          if assigned(Callback) then Callback();
-      finally
-        TMonitor.Exit(FBeforeCollectCallbacks);
-      end;
+      CollectAndSerialize(Serializer);
 
-      var ACalls: TArray<ITask>;
-      TMonitor.Enter(FBeforeCollectAsyncCallbacks);
-      try
-        for var AsyncCallback: TFunc<ITask> in FBeforeCollectAsyncCallbacks do begin
-          if not assigned(AsyncCallback) then continue;
-          ACalls := ACalls+[AsyncCallback()];
-        end;
-      finally
-        TMonitor.Exit(FBeforeCollectAsyncCallbacks);
-      end;
-
-      TTask.WaitForAll(ACalls);
-
-      for var Collector: ICollector in FCollectors.Values do
-        TTask.WaitForAny(TCollector(Collector).CollectAndSerializeAsync(Serializer));
+      {$IFDEF DEBUG}
+      TThread.Current.NameThreadForDebugging('-');
+      {$ENDIF}
     end
   );
 end;
@@ -2454,10 +2499,9 @@ end;
 
 {$REGION 'TCounterChild'}
 
-function TCounterChild.CollectAndSerializeImplAsync(
-  Serializer: IMetricsSerializer): ITask;
+procedure TCounterChild.CollectAndSerializeImpl(Serializer: IMetricsSerializer);
 begin
-  result := Serializer.WriteMetricAsync(FIdentifier, Value);
+  Serializer.WriteMetric(FIdentifier, Value);
 end;
 
 constructor TCounterChild.Create(Parent: TCollector; Labels,
@@ -2543,10 +2587,9 @@ end;
 
 {$REGION 'TGaugeChild'}
 
-function TGaugeChild.CollectAndSerializeImplAsync(
-  Serializer: IMetricsSerializer): ITask;
+procedure TGaugeChild.CollectAndSerializeImpl(Serializer: IMetricsSerializer);
 begin
-  result := Serializer.WriteMetricAsync(FIdentifier, Value);
+  Serializer.WriteMetric(FIdentifier, Value);
 end;
 
 constructor TGaugeChild.Create(Parent: TCollector; Labels,
@@ -2914,48 +2957,43 @@ end;
 
 {$REGION 'TSummaryChild' }
 
-function TSummaryChild.CollectAndSerializeImplAsync(
-  Serializer: IMetricsSerializer): ITask;
+procedure TSummaryChild.CollectAndSerializeImpl(Serializer: IMetricsSerializer);
 begin
-  result := TTask.Run(
-    procedure begin
-      // We output sum.
-      // We output count.
-      // We output quantiles.
+  // We output sum.
+  // We output count.
+  // We output quantiles.
 
-      var LNow          := TDateTime.UtcNow;
-      var Count: double;
-      var Sum: double;
-      var Values        := TList<TQuantileEpsilonPair>.Create;
+  var LNow          := TDateTime.UtcNow;
+  var Count: double;
+  var Sum: double;
+  var Values        := TList<TQuantileEpsilonPair>.Create;
 
-      TMonitor.Enter(FBufLock);
-      try
-        TMonitor.Enter(FLock);
-        try
-          SwapBufs(LNow);
-          FlushColdBuf;
+  TMonitor.Enter(FBufLock);
+  try
+    TMonitor.Enter(FLock);
+    try
+      SwapBufs(LNow);
+      FlushColdBuf;
 
-          Count := FCount;
-          Sum   := FSum;
+      Count := FCount;
+      Sum   := FSum;
 
-          for var Quantile: double in FSortedObjectives do begin
-            var Value := ifthen(FHeadStream.Count = 0, double.NaN, FHeadStream.Query(Quantile));
-            Values.Add(TQuantileEpsilonPair.New(Quantile, Value));
-          end;
-        finally
-          TMonitor.Exit(FLock);
-        end;
-      finally
-        TMonitor.Exit(FBufLock);
+      for var Quantile: double in FSortedObjectives do begin
+        var Value := ifthen(FHeadStream.Count = 0, double.NaN, FHeadStream.Query(Quantile));
+        Values.Add(TQuantileEpsilonPair.New(Quantile, Value));
       end;
+    finally
+      TMonitor.Exit(FLock);
+    end;
+  finally
+    TMonitor.Exit(FBufLock);
+  end;
 
-      TTask.WaitForAny(Serializer.WriteMetricAsync(FSumIdentifier, sum));
-      TTask.WaitForAny(Serializer.WriteMetricAsync(FCountIdentifier, count));
+  Serializer.WriteMetric(FSumIdentifier, sum);
+  Serializer.WriteMetric(FCountIdentifier, count);
 
-      for var I := 0 to Values.Count-1 do
-        TTask.WaitForAny(Serializer.WriteMetricAsync(FQuantileIdentifiers[I], Values[I].Epsilon));
-    end
-  );
+  for var I := 0 to Values.Count-1 do
+    Serializer.WriteMetric(FQuantileIdentifiers[I], Values[I].Epsilon);
 end;
 
 constructor TSummaryChild.Create(Parent: TCollector; Labels,
@@ -3254,30 +3292,26 @@ end;
 
 {$REGION 'THistogramChild'}
 
-function THistogramChild.CollectAndSerializeImplAsync(
-  Serializer: IMetricsSerializer): ITask;
+procedure THistogramChild.CollectAndSerializeImpl(
+  Serializer: IMetricsSerializer);
 begin
-  result := TTask.Run(
-    procedure begin
-      // We output sum.
-      // We output count.
-      // We output each bucket in order of increasing upper bound.
+  // We output sum.
+  // We output count.
+  // We output each bucket in order of increasing upper bound.
 
-      TTask.WaitForAny(Serializer.WriteMetricAsync(FSumIdentifier, FSum.Value));
+  Serializer.WriteMetric(FSumIdentifier, FSum.Value);
 
-      var SumCount: double := 0.0;
-      for var Val in FBucketCounts do
-        SumCount := SumCount + Val.Value;
+  var SumCount: double := 0.0;
+  for var Val in FBucketCounts do
+    SumCount := SumCount + Val.Value;
 
-      TTask.WaitForAny(Serializer.WriteMetricAsync(FCountIdentifier, SumCount));
+  Serializer.WriteMetric(FCountIdentifier, SumCount);
 
-      var CumulativeCount: int64 := 0;
-      for var I := 0 to Length(FBucketCounts)-1 do begin
-        CumulativeCount := CumulativeCount + FBucketCounts[I].Value;
-        TTask.WaitForAny(Serializer.WriteMetricAsync(FBucketIdentifiers[I], CumulativeCount));
-      end;
-    end
-  );
+  var CumulativeCount: int64 := 0;
+  for var I := 0 to Length(FBucketCounts)-1 do begin
+    CumulativeCount := CumulativeCount + FBucketCounts[I].Value;
+    Serializer.WriteMetric(FBucketIdentifiers[I], CumulativeCount);
+  end;
 end;
 
 constructor THistogramChild.Create(Parent: TCollector; Labels,
@@ -3371,38 +3405,27 @@ begin
   result := FStreamLazy;
 end;
 
-function TTextSerializer.WriteFamilyDeclarationAsync(
-  HeaderLines: TArray<TArray<byte>>): ITask;
+procedure TTextSerializer.WriteFamilyDeclaration(
+  HeaderLines: TArray<TArray<byte>>);
 begin
-  result := TTask.Run(
-    procedure begin
-      for var Line: TArray<Byte> in HeaderLines do begin
-        FStream.Write(Line, Length(Line));
-        FStream.Write(NewLine, Length(NewLine));
-      end;
-    end
-  );
+  for var Line: TArray<Byte> in HeaderLines do begin
+    FStream.Write(Line, Length(Line));
+    FStream.Write(NewLine, Length(NewLine));
+  end;
 end;
 
-function TTextSerializer.WriteMetricAsync(Identifier: TArray<byte>;
-  value: double): ITask;
+procedure TTextSerializer.WriteMetric(Identifier: TArray<byte>; Value: double);
 begin
-  result := TTask.Run(
-    procedure
-    begin
-      FStream.Write(Identifier, Length(Identifier));
-      FStream.Write(Space, Length(Space));
-      var ValueAsString := Value.ToString.Replace(',', '.');
-//      var numBytes := TPrometheusConstants.ExportEncoding
-//            .GetBytes(ValueAsString, 1, ValueAsString.Length, FStringBytesBuffer, 0);
+  FStream.Write(Identifier, Length(Identifier));
+  FStream.Write(Space, Length(Space));
+  var ValueAsString := Value.ToString.Replace(',', '.');
+//  var numBytes := TPrometheusConstants.ExportEncoding
+//     .GetBytes(ValueAsString, 1, ValueAsString.Length, FStringBytesBuffer, 0);
 
-      FStringBytesBuffer := TPrometheusConstants.ExportEncoding.GetBytes(ValueAsString);
-      FStream.Write(FStringBytesBuffer, Length(FStringBytesBuffer));
-      FStream.Write(NewLine, Length(NewLine));
-    end
-  );
+  FStringBytesBuffer := TPrometheusConstants.ExportEncoding.GetBytes(ValueAsString);
+  FStream.Write(FStringBytesBuffer, Length(FStringBytesBuffer));
+  FStream.Write(NewLine, Length(NewLine));
 end;
-
 
 {$ENDREGION}
 
@@ -3709,6 +3732,10 @@ function TCounterExtensions.CountExceptionsAsync(Wrapped: TFunc<ITask>;
 begin
   result := TTask.Run(
     procedure begin
+      {$IFDEF DEBUG}
+      TThread.Current.NameThreadForDebugging('Task TCounterExtensions.CountExceptionsAsync');
+      {$ENDIF}
+
       if not assigned(self) then
         raise EArgumentException.Create('self');
 
@@ -3725,6 +3752,10 @@ begin
           end;
         end;
       end;
+
+      {$IFDEF DEBUG}
+      TThread.Current.NameThreadForDebugging('-');
+      {$ENDIF}
     end
   );
 end;
@@ -3736,6 +3767,10 @@ begin
   result := TTask.Future<TResult>(
     function: TResult
     begin
+      {$IFDEF DEBUG}
+      TThread.Current.NameThreadForDebugging('Task TCounterExtensions.CountExceptionsAsync<TResult>');
+      {$ENDIF}
+
       if not assigned(self) then
         raise EArgumentException.Create('self');
 
@@ -3752,6 +3787,10 @@ begin
           end;
         end;
       end;
+
+      {$IFDEF DEBUG}
+      TThread.Current.NameThreadForDebugging('-');
+      {$ENDIF}
     end
   ).Start;
 end;

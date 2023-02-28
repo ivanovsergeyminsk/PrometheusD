@@ -16,6 +16,9 @@ uses
 
 type
   ICancellationToken = interface;
+  TMetricServer = class;
+  TMetricPusher = class;
+
 
   /// <summary>
   /// A metric server exposes a Prometheus metric exporter endpoint in the background,
